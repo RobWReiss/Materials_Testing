@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grain Size Simulator</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1d2a36;--mut:#5a6978;--line:#d8dfe6;--acc:#1b5f86;--hot:#d9731f;--ok:#1b7f4b;--bad:#b3261e;--soft:#e7eef4}
+@media(prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1e262e;--ink:#e6ebf0;--mut:#9aa8b6;--line:#34414d;--acc:#5ab0e0;--hot:#f0963f;--ok:#4cc98a;--bad:#ff8a80;--soft:#27333e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{background:#22323f;color:#fff;padding:18px 20px;border-bottom:4px solid var(--hot)}
+header h1{margin:0;font-size:1.4rem}header p{margin:2px 0 0;color:#b9c7d4;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.15rem}h3{margin:12px 0 6px;font-size:1rem}
+button,input{font:inherit;color:inherit}
+.chip,.btn{border:1px solid var(--line);background:var(--soft);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.go{background:var(--hot);color:#1a1006;border-color:var(--hot);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.mut{color:var(--mut);font-size:.92rem}
+.hide{display:none}canvas{display:block}
+.req{background:var(--soft);border-radius:8px;padding:10px 14px;margin:10px 0}
+table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.refs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:1;min-width:300px}
+.rf{border:3px solid transparent;background:var(--soft);border-radius:8px;padding:5px;cursor:pointer;text-align:center}
+.rf canvas{width:100%;height:auto;border-radius:4px}.rf.sel{border-color:var(--hot)}
+#sp,#ic{width:100%;max-width:360px;height:auto;border-radius:6px;border:1px solid var(--line)}
+.xl{flex:1 1 100%!important}.xl #ic{max-width:900px}
+.f{display:grid;grid-template-columns:1fr 100px 28px;gap:8px;align-items:center;margin:6px 0}
+.f input{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);min-height:40px}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+details{background:var(--soft);border-radius:8px;padding:8px 12px;margin-bottom:16px}summary{cursor:pointer;font-weight:600}
+dt{font-weight:600;margin-top:6px}dd{margin:0;color:var(--mut)}
+.note{border-left:4px solid var(--hot);padding:6px 12px;background:var(--soft);margin:10px 0;border-radius:0 8px 8px 0}
+ol li{margin:4px 0}.tbl td,.tbl th{padding:4px 8px;text-align:center}
+@media print{.noprint,.btn,.chip,details{display:none!important}body{background:#fff;color:#000}}
+</style></head><body>
+<header><h1>Grain Size Simulator</h1><p>Measure the size of the crystals inside steel (ASTM E112), two different ways.</p></header>
+<main>
+<section class="card"><h2>Two ways to measure grain size</h2>
+<p style="margin-top:0">Steel is made of tiny crystals called grains. Etching a polished sample with a weak acid shows the edges of the grains as dark lines. Grain size is given as a number, <b>G</b>. <b>A bigger G means smaller grains.</b> Both methods below give you G.</p>
+<table><thead><tr><th></th><th>Comparison method</th><th>Intercept method</th></tr></thead><tbody>
+<tr><td><b>What you do</b></td><td>Look at the sample and match it to the reference picture that looks most like it.</td><td>Draw lines of known length across the picture, count the grain boundaries they cross, then calculate the answer.</td></tr>
+<tr><td><b>Speed</b></td><td>Quick. No counting.</td><td>Slower, with some counting and arithmetic.</td></tr>
+<tr><td><b>Accuracy</b></td><td>Depends on judgement. Roughly within one G number.</td><td>Measured, so repeatable. Good to within about half a G number.</td></tr>
+<tr><td><b>Where it is used</b></td><td>Everyday quality checks, where a fast answer is enough.</td><td>Settling disagreements, certificates, research, and odd-shaped grains.</td></tr></tbody></table></section>
+<section class="card"><h2>Why does grain size matter?</h2><dl style="margin:0">
+<dt>Strength and toughness</dt><dd>Finer grains make steel both stronger and tougher. This is why the tensile and Charpy results in the other modules depend on grain size.</dd>
+<dt>How it is controlled</dt><dd>Grain size is set during steelmaking by the temperature of the steel while it is rolled and heat treated. Cooler finishing and added elements such as niobium keep the grains small.</dd></dl></section>
+
+<section class="card"><h2>1. Your specimen</h2>
+<div class="req" id="req"></div>
+<div class="row noprint"><button class="btn" id="bNew">New specimen</button>
+<span class="chips"><button class="chip" data-m="E" aria-pressed="true">Easy</button> <button class="chip" data-m="H" aria-pressed="false">Hard</button></span>
+<span class="chips"><button class="chip" data-t="C" aria-pressed="true">Comparison method</button> <button class="chip" data-t="I" aria-pressed="false">Intercept method</button></span></div>
+<p class="mut" id="md" style="margin-bottom:6px"></p><p class="note hide" id="hn">In a real sample, the cut goes through grains at different heights, so some small shapes are only the tip of a bigger grain. A few small grains do not mean the steel is fine-grained. Judge by the typical grain, not the smallest.</p><p class="mut" style="margin-bottom:0">You can use either method on the same specimen. All pictures are at 100× magnification.</p></section>
+
+<section class="card" id="pC"><h2>2. Comparison method: match the reference picture</h2>
+<p class="mut" style="margin-top:0">Click the reference picture whose grains look closest in size to the specimen. G 4 has big grains and G 9 has very small ones.</p>
+<div class="row"><div><canvas id="sp" width="300" height="300"></canvas><p class="mut">Your specimen</p></div><div class="refs" id="refs"></div></div>
+<div class="noprint" style="margin-top:10px"><button class="btn" id="bC1">Check my choice</button> <button class="btn" id="bS1">Show answer</button></div><p id="m1" class="note" style="min-height:2.6em"></p></section>
+
+<section class="card hide" id="pI"><h2>2. Intercept method: count the crossings</h2>
+<div class="row"><div id="icw" style="flex:1 1 280px"><canvas id="ic" width="900" height="900"></canvas>
+<div class="noprint" style="margin-top:6px"><button class="btn" id="bX">Expand image</button> <label><input type="checkbox" id="mark"> Mark the crossings for me</label></div></div>
+<div style="flex:1;min-width:280px"><ol style="margin-top:0;padding-left:20px">
+<li>Count the grain boundaries that each orange line crosses. Each time a line passes from one grain into the next counts as one. Add up all three lines to get <b>P</b>.</li>
+<li>The three lines are each 622 µm long, so the total length is 3 × 622 = 1866 µm. (A µm is one thousandth of a millimetre. The scale bar shows 100 µm.)</li>
+<li>Average grain width: <b>ℓ = 1866 ÷ P</b>, in µm. Example: P = 30 gives 1866 ÷ 30 = 62.2 µm.</li>
+<li>Find the closest value of ℓ in the table below to read off G. In the example, 62.2 is closest to 56.3, so G = 5.</li></ol>
+<table class="tbl" id="gt"></table>
+<p class="mut">For the curious: G = −6.6457 × log₁₀(ℓ in mm) − 3.298.</p>
+<div id="af"></div><div class="noprint"><button class="btn" id="bC2">Check my answers</button> <button class="btn" id="bS2">Show answers</button> <span id="tally" class="mut"></span></div></div></div></section>
+
+<section class="card"><h2>3. Does the steel meet the requirement?</h2><p id="spec"></p>
+<div class="row noprint"><button class="btn" id="bP" disabled>Accept</button><button class="btn" id="bF" disabled>Reject</button><button class="btn" id="bPrn">Print report</button></div>
+<p class="mut noprint" id="unl">Check your answer with either method first.</p><div id="res"></div></section>
+<p class="mut">Pictures are computer-generated to look like etched steel at 100×. Requirements are illustrative only. Not for design or certification.</p>
+</main>
+<script>
+//MATH
+const W=300,FW=622,C=.92,CH=.94;
+const asG=l=>-6.6457*Math.log10(l/1000)-3.298,lenG=G=>1000*Math.pow(10,-(G+3.298)/6.6457);
+function voro(G,seed,hard){let a=seed|0;const r=()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+ const N=(hard?CH:C)*6*Math.pow(2,G-1),cs=W/Math.sqrt(N),O=2,R=hard?2:1,m=Math.ceil(W/cs)+2*O+1,M=m*m*2,sx=new Float32Array(M).fill(-1e6),sy=new Float32Array(M).fill(-1e6),sw=new Float32Array(M),sh=new Float32Array(M);
+ for(let j=0;j<m;j++)for(let i=0;i<m;i++){const k=(j*m+i)*2;
+  if(hard){sx[k]=(i-O+r())*cs;sy[k]=(j-O+r())*cs;sw[k]=cs*cs*1.2*(r()-.35);sh[k]=r();if(r()<.3){sx[k+1]=(i-O+r())*cs;sy[k+1]=(j-O+r())*cs;sw[k+1]=-.25*cs*cs;sh[k+1]=r()}}
+  else{sx[k]=(i-O+.15+.7*r())*cs;sy[k]=(j-O+.15+.7*r())*cs;sh[k]=r()}}
+ const px=new Uint8ClampedArray(W*W*4),id=new Int32Array(W*W);
+ for(let y=0;y<W;y++)for(let x=0;x<W;x++){const ci=Math.floor(x/cs)+O,cj=Math.floor(y/cs)+O;let D1=1e15,D2=1e15,b1=0,b2=0;
+  for(let dj=-R;dj<=R;dj++)for(let di=-R;di<=R;di++){const c=((cj+dj)*m+ci+di)*2;for(let s=0;s<2;s++){const k=c+s,dx=x-sx[k],dy=y-sy[k],D=dx*dx+dy*dy-sw[k];if(D<D1){D2=D1;b2=b1;D1=D;b1=k}else if(D<D2){D2=D;b2=k}}}
+  const o=(y*W+x)*4,gap=(D2-D1)/(2*Math.hypot(sx[b1]-sx[b2],sy[b1]-sy[b2]));id[y*W+x]=b1;
+  if(gap<.65){px[o]=48;px[o+1]=53;px[o+2]=60}else{const s=206+sh[b1]*30+(r()-.5)*8;px[o]=s;px[o+1]=s+2;px[o+2]=s+5}px[o+3]=255}
+ return{px,id}}
+function cross(id,y){const p=[];for(let x=1;x<W;x++)if(id[y*W+x]!==id[y*W+x-1])p.push(x);return p}
+function mkSpec(hard){const k=4+Math.floor(Math.random()*6),ys=[50,150,250],T=hard?60:30;
+ for(let t=0;t<T;t++){const nom=k+(Math.random()-.5)*.5,seed=Math.floor(Math.random()*1e9),v=voro(nom,seed,hard),pos=ys.map(y=>cross(v.id,y)),P=pos.reduce((a,p)=>a+p.length,0);
+  if(Math.abs(asG(3*FW/P)-k)<=(hard?.35:.5)||t==T-1)return{k,v,pos,P,ys,hard,req:5+Math.floor(Math.random()*3)}}}
+//END
+const $=id=>document.getElementById(id);let S,pick=null,tab='C',mode='E';
+const put=(cv,v)=>cv.getContext('2d').putImageData(new ImageData(v.px,W,W),0,0);
+$('refs').innerHTML=[4,5,6,7,8,9].map(g=>`<button class="rf" data-g="${g}"><canvas id="r${g}" width="300" height="300"></canvas><b>G ${g}</b></button>`).join('');
+[4,5,6,7,8,9].forEach(g=>put($('r'+g),voro(g,4242+g*31)));
+$('gt').innerHTML='<tr><th>G</th>'+[3,4,5,6,7,8,9,10].map(g=>`<th>${g}</th>`).join('')+'</tr><tr><th>ℓ (µm)</th>'+[3,4,5,6,7,8,9,10].map(g=>`<td>${lenG(g).toFixed(1)}</td>`).join('')+'</tr>';
+$('af').innerHTML=[['P','Total crossings, P',1],['L','Average grain width, ℓ (µm)',.1],['G','Grain size number, G (whole number)',1]].map(([k,l,s])=>`<div class="f"><label for="i${k}">${l}</label><input id="i${k}" type="number" step="${s}" inputmode="decimal"><span id="k${k}"></span></div>`).join('');
+document.querySelectorAll('.chip[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('.chip[data-m]').forEach(c=>c.setAttribute('aria-pressed',c==b));load()});
+document.querySelectorAll('.chip[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll('.chip[data-t]').forEach(c=>c.setAttribute('aria-pressed',c==b));$('pC').classList.toggle('hide',tab!='C');$('pI').classList.toggle('hide',tab!='I')});
+function drawIC(){const c=$('ic'),x=c.getContext('2d'),s=3,t=document.createElement('canvas');t.width=t.height=W;put(t,S.v);
+ x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(t,0,0,W*s,W*s);
+ S.ys.forEach((y,i)=>{const Y=(y+.5)*s;x.strokeStyle='#e8731f';x.lineWidth=4;x.beginPath();x.moveTo(0,Y);x.lineTo(W*s,Y);x.stroke();x.fillStyle='#e8731f';x.fillRect(0,Y-16,8,32);x.fillRect(W*s-8,Y-16,8,32);
+  x.font='bold 30px system-ui';x.textAlign='left';x.lineWidth=6;x.strokeStyle='#000';x.fillStyle='#fff';x.strokeText(i+1,20,Y-14);x.fillText(i+1,20,Y-14);
+  if($('mark').checked)S.pos[i].forEach(p=>{x.fillStyle='#ff2d2d';x.beginPath();x.arc(p*s,Y,6,0,7);x.fill()})});
+ const bw=100*W/FW*s;x.fillStyle='#fff';x.fillRect(W*s-bw-36,W*s-72,bw,14);x.font='bold 28px system-ui';x.textAlign='center';x.lineWidth=6;x.strokeStyle='#000';x.strokeText('100 µm',W*s-bw/2-36,W*s-86);x.fillText('100 µm',W*s-bw/2-36,W*s-86);x.textAlign='left'}
+$('bX').onclick=()=>{const e=$('icw').classList.toggle('xl');$('bX').textContent=e?'Shrink image':'Expand image'};
+$('mark').onchange=drawIC;
+function load(){S=mkSpec(mode=='H');$('hn').classList.toggle('hide',mode!='H');$('md').textContent=mode=='H'?'Hard: uneven grains, as in a real sample. The reference pictures stay neat, so look past the odd small or large grain.':'Easy: even grains, similar to the reference pictures.';pick=null;put($('sp'),S.v);drawIC();
+ document.querySelectorAll('.rf').forEach(b=>b.classList.remove('sel'));$('m1').textContent='';$('tally').textContent='';$('res').innerHTML='';
+ ['P','L','G'].forEach(k=>{$('i'+k).value='';$('k'+k).textContent=''});$('bP').disabled=$('bF').disabled=1;$('unl').classList.remove('hide');
+ $('req').innerHTML=`Requirement for this order: grain size number <b>G ${S.req} or higher</b>, which means grains that are that fine or finer.`;$('spec').innerHTML=`Requirement: <b>G ${S.req} or higher</b>. Use your result from either method to decide.`}
+$('refs').onclick=e=>{const b=e.target.closest('.rf');if(!b)return;pick=+b.dataset.g;document.querySelectorAll('.rf').forEach(c=>c.classList.toggle('sel',c==b))};
+function unlock(){$('bP').disabled=$('bF').disabled=0;$('unl').classList.add('hide')}
+$('bC1').onclick=()=>{if(pick==null){$('m1').textContent='Click the reference picture that looks most like your specimen first.';return}
+ $('m1').textContent=pick==S.k?`Correct. The specimen is G ${S.k}.`:pick>S.k?'Not quite. The grains in that picture are smaller than in your specimen. A bigger G means smaller grains, so try a lower number.':'Not quite. The grains in that picture are bigger than in your specimen. A smaller G means bigger grains, so try a higher number.';unlock()};
+$('bS1').onclick=()=>{pick=S.k;document.querySelectorAll('.rf').forEach(c=>c.classList.toggle('sel',+c.dataset.g==S.k));$('m1').textContent=`The specimen is G ${S.k}.`;unlock()};
+$('bC2').onclick=()=>{const P=parseFloat($('iP').value),L=parseFloat($('iL').value),G=parseFloat($('iG').value),m=(k,o)=>{$('k'+k).textContent=o?'✓':'✗';$('k'+k).className=o?'pass':'fail';return o};
+ const o1=m('P',!isNaN(P)&&Math.abs(P-S.P)<=Math.max(3,(S.hard?.18:.12)*S.P)),o2=m('L',!isNaN(L)&&!isNaN(P)&&Math.abs(L-3*FW/P)<=.03*3*FW/P),o3=m('G',!isNaN(G)&&Math.abs(G-S.k)<=.5);
+ $('tally').textContent=(o1+o2+o3)+' of 3 correct'+(o1?'':'. Recount the crossings, or tick "Mark the crossings".');unlock()};
+$('bS2').onclick=()=>{$('iP').value=S.P;$('iL').value=(3*FW/S.P).toFixed(1);$('iG').value=S.k;unlock()};
+function decide(ans){const o=S.k>=S.req;
+ $('res').innerHTML=`<p>${ans==o?'<b class="pass">Correct.</b> ':'<b class="fail">Not quite.</b> '}The specimen is G ${S.k}, so it <b class="${o?'pass':'fail'}">${o?'meets':'does not meet'}</b> the requirement of G ${S.req} or higher${o?'.':', because its grains are too coarse.'}</p>
+<div class="note">Finer grain means stronger and tougher steel, which links this module to the tensile and Charpy tests. Grain size is controlled by the temperature of the steel during rolling and heat treatment.</div>`}
+$('bP').onclick=()=>decide(true);$('bF').onclick=()=>decide(false);$('bPrn').onclick=()=>print();$('bNew').onclick=load;
+load();
+</script></body></html>

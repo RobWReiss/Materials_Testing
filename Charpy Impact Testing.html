@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Charpy Impact Test Simulator</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1d2a36;--mut:#5a6978;--line:#d8dfe6;--acc:#1b5f86;--hot:#d9731f;--ok:#1b7f4b;--bad:#b3261e;--soft:#e7eef4}
+@media(prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1e262e;--ink:#e6ebf0;--mut:#9aa8b6;--line:#34414d;--acc:#5ab0e0;--hot:#f0963f;--ok:#4cc98a;--bad:#ff8a80;--soft:#27333e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{background:#22323f;color:#fff;padding:18px 20px;border-bottom:4px solid var(--hot)}
+header h1{margin:0;font-size:1.4rem}header p{margin:2px 0 0;color:#b9c7d4;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.15rem}h3{margin:12px 0 6px;font-size:1rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px}button,input{font:inherit;color:inherit}
+.chip,.btn{border:1px solid var(--line);background:var(--soft);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn.go{background:var(--hot);color:#1a1006;border-color:var(--hot);font-weight:600}.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.mut{color:var(--mut);font-size:.92rem}
+canvas{display:block}#pc{width:100%;max-width:340px;aspect-ratio:340/390;background:var(--soft);border-radius:8px}
+.hide{display:none}.req{background:var(--soft);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:1.05rem}
+.temp{display:inline-block;padding:2px 12px;border-radius:14px;color:#fff;font-weight:700}
+table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+.big{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+.faces{display:flex;gap:12px;flex-wrap:wrap}.faces figure{margin:0;text-align:center}.faces canvas{width:120px;height:120px;border:1px solid var(--line);border-radius:4px}
+.f{display:grid;grid-template-columns:1fr 100px 28px;gap:8px;align-items:center;margin:6px 0}
+.f input{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);min-height:40px}
+details{background:var(--soft);border-radius:8px;padding:8px 12px;margin-bottom:16px}summary{cursor:pointer;font-weight:600}
+dt{font-weight:600;margin-top:6px}dd{margin:0;color:var(--mut)}
+.note{border-left:4px solid var(--hot);padding:6px 12px;background:var(--soft);margin:10px 0;border-radius:0 8px 8px 0}
+@media print{.noprint,.chips,.btn,details{display:none!important}body{background:#fff;color:#000}}
+</style></head><body>
+<header><h1>Charpy Impact Test Simulator</h1><p>Swing the hammer, break the bar, and find out how tough the steel really is.</p></header>
+<main>
+<details class="noprint"><summary>New to this? What the words mean</summary><dl>
+<dt>The Charpy test</dt><dd>A heavy pendulum swings down and breaks a small notched bar. The energy the bar soaks up, in joules (J), is its toughness. Tough steel absorbs a lot of energy; brittle steel snaps with very little.</dd>
+<dt>Strength is not toughness</dt><dd>A very strong steel can still be brittle. Toughness tells you whether a part will bend and warn you, or shatter without warning.</dd>
+<dt>Why temperature matters</dt><dd>Most steels get more brittle as they get colder. Steel that is tough in a warm workshop can crack like glass on a freezing night, so tests are done at the temperature the steel will really work at. Austenitic stainless steel (304) is the exception.</dd>
+<dt>Fracture appearance</dt><dd>Tough breaks leave a dull, rough, fibrous face. Brittle breaks leave a bright, shiny, crystalline face. "% shear" is the share of the face that is dull and fibrous, not the shiny part.</dd>
+<dt>KV300</dt><dd>The energy absorbed using a V-notch bar on a 300 J pendulum, as written in ISO 148-1.</dd>
+<dt>The pass rule</dt><dd>Three bars make one test. The average must meet the requirement. One bar may fall below it, but none below 70% of it.</dd></dl></details>
+
+<section class="card"><h2>1. Choose a steel and read the test request</h2>
+<div class="chips" id="grades" role="group" aria-label="Steel grade"></div>
+<p id="ginfo" class="mut"></p>
+<div class="req" id="req"></div>
+<div class="row noprint"><button class="btn" id="bNew">New test request</button><button class="btn go" id="bRun">Break specimen 1 of 3</button></div>
+<p class="mut">Standard bar: 10 × 10 × 55 mm with a 2 mm V-notch, tested on a 300 J pendulum to ISO 148-1. The bars have been held at the test temperature for at least 5 minutes. Each new request may ask for a different temperature, so try the same grade warm and cold.</p></section>
+
+<section class="card"><div class="row"><canvas id="pc" aria-label="Pendulum and dial"></canvas>
+<div style="flex:1;min-width:300px"><p class="mut" style="margin:0">Absorbed energy, KV300</p><p class="big" id="rd" style="margin:0 0 8px">—</p>
+<table><thead><tr><th>Specimen</th><th>Energy (J)</th></tr></thead><tbody id="rb"></tbody></table>
+<h3>Fracture faces</h3><div class="faces" id="faces"></div>
+<label class="noprint"><input type="checkbox" id="grid"> Show grid (20 squares, each 5% of the fracture face below the notch)</label></div></div></section>
+
+<section class="card hide" id="s2"><h2>2. Judge the test</h2><p id="obs" class="note"></p>
+<div class="row"><div style="flex:1;min-width:280px"><h3 style="margin-top:0">How to estimate % shear</h3>
+<ol style="margin:0;padding-left:20px"><li>Ignore the dark strip at the top of each picture. That is the notch, cut before the test. The fracture face is the area below it.</li>
+<li>Find the <b>shiny</b> part: bright, sparkly, crystalline metal, usually a patch in the middle. This is the brittle part.</li>
+<li>The <b>dull grey</b> part around it, rough like torn metal, is the fibrous (tough) part. <b>% shear is the share that is dull, not the share that is shiny.</b></li>
+<li>Tick "Show grid" to split the face into 20 squares of 5% each. Count the shiny area: a filled square counts 1, a half-filled square counts ½, and two halves make one. Ignore tiny slivers.</li>
+<li>Multiply your count by 5 to get % shiny, then subtract from 100 to get % shear. Example: 6 full and 4 half squares is 8 squares, so 40% shiny and 60% shear.</li>
+<li>All dull means 100% shear. All shiny means 0%. Being within 10 points is good enough.</li></ol>
+<h3>Your readings</h3><div id="af"></div><p class="mut">For the average, add the three energies from the results table and divide by 3.</p>
+<button class="btn" id="bChk">Check my answers</button> <button class="btn" id="bShow">Show answers</button> <span id="tally" class="mut"></span></div>
+<div style="flex:1;min-width:280px"><h3 style="margin-top:0">The rule</h3><p id="rule"></p>
+<p><b>Does this test pass?</b></p><div class="row noprint"><button class="btn" id="bP">Pass</button><button class="btn" id="bF">Fail</button><button class="btn" id="bPrn">Print report</button></div></div></div>
+<div id="res"></div></section>
+<p class="mut">Values are indicative, for education only. The requirements shown are typical or illustrative, not tied to a specific delivery condition. Not for design or certification.</p>
+</main>
+<script>
+//MATH
+const N=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*Math.random())};
+const R=(a,b)=>a+(b-a)*Math.random();
+const G=[
+{id:'S275',n:'S275 mild steel',std:'EN 10025-2',US:[150,190],LS:4,T0:18,C:30,reqs:[[20,27],[0,27],[-20,27]],note:'Mild steel is a ferritic steel: tough when warm, but the energy falls away as it gets colder.'},
+{id:'S355',n:'S355 structural steel',std:'EN 10025-2',US:[140,180],LS:4,T0:8,C:30,reqs:[[20,27],[0,27],[-20,27]],note:'Similar to S275 but stronger. Compare how it behaves at the different test temperatures.'},
+{id:'S460',n:'S460 HSLA steel',std:'EN 10025-3',US:[140,190],LS:4,T0:-15,C:30,reqs:[[0,40],[-20,40],[-50,27]],note:'Fine-grained steel, made to stay tough at lower temperatures than S275 or S355.'},
+{id:'C45',n:'C45 / 1045',std:'EN 10083-2, quenched and tempered',US:[60,90],LS:4,T0:5,C:35,reqs:[[20,25],[-20,25]],note:'Medium carbon steel. It absorbs less energy than the structural steels, and the cold hurts it sooner.'},
+{id:'42CrMo4',n:'42CrMo4 / 4140',std:'EN 10083-3, quenched and tempered',US:[90,120],LS:5,T0:-7,C:40,reqs:[[20,35],[-20,35]],note:'Quenched and tempered alloy steel: very strong and still tough, with a gentle drop in the cold.'},
+{id:'8620',n:'8620',std:'core properties, case-hardening grade',US:[100,150],LS:5,T0:-5,C:40,reqs:[[20,40],[-20,27],[-40,27]],note:'The tough core of a case-hardened part. Good toughness, with a transition at low temperatures.'},
+{id:'304',n:'304 stainless',std:'ASTM A240, annealed',fcc:1,US:[110,190],LS:0,T0:0,C:1,reqs:[[20,100],[-100,100]],note:'Austenitic stainless steel has no tough-to-brittle change. It stays tough, with a fully fibrous face, even at very low temperatures.'},
+{id:'300M',n:'300M aerospace steel',std:'AMS 6417',US:[22,32],LS:6,T0:-10,C:45,reqs:[[20,18],[-20,12]],note:'Ultra-high-strength steel. Immensely strong but it soaks up very little impact energy, even when warm.'}];
+function mkReq(g,prev){const rs=g.reqs.filter(r=>!prev||r[0]!==prev.T||r[1]!==prev.req),r=rs[Math.floor(Math.random()*rs.length)]||g.reqs[0];
+ const q={T:r[0],req:r[1],T0:g.T0+N()*12,US:R(...g.US),sp:[]};
+ for(let i=0;i<3;i++){let K,sh;if(g.fcc){K=q.US*(1+N()*.05)*(1-.0008*(20-q.T));sh=100}
+  else{const T0=q.T0+N()*8,US=q.US*(1+N()*.04),f=(1+Math.tanh((q.T-T0)/g.C))/2;K=g.LS+(US-g.LS)*f;sh=100*Math.pow(f,.8)+N()*4}
+  q.sp.push({K:Math.max(2,Math.round(K)),sh:Math.max(0,Math.min(100,Math.round(sh))),seed:Math.floor(Math.random()*1e9)})}return q}
+function verdict(q){const k=q.sp.map(s=>s.K),m=k.reduce((a,b)=>a+b)/3,below=k.filter(x=>x<q.req).length,low=Math.min(...k);
+ return{m,below,low,c1:m>=q.req,c2:below<=1,c3:low>=.7*q.req,ok:m>=q.req&&below<=1&&low>=.7*q.req}}
+//END
+const $=id=>document.getElementById(id),pc=$('pc'),px=pc.getContext('2d');
+let g=G[0],q,idx=0,run=0,t0=0,tau=0,curK=0;const AL=2.618;
+const col=n=>getComputedStyle(document.body).getPropertyValue(n);
+$('grades').innerHTML=G.map((x,i)=>`<button class="chip" data-i="${i}" aria-pressed="${!i}">${x.id}</button>`).join('');
+$('grades').onclick=e=>{const i=e.target.dataset.i;if(i==null||run)return;g=G[i];document.querySelectorAll('.chip[data-i]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.i==i));load(0)};
+$('faces').innerHTML=[0,1,2].map(i=>`<figure><canvas id="f${i}" width="100" height="100"></canvas><figcaption class="mut">Specimen ${i+1}</figcaption></figure>`).join('');
+function load(keep){q=mkReq(g,keep?q:null);idx=0;run=0;tau=0;curK=0;$('s2').classList.add('hide');$('res').innerHTML='';$('tally').textContent='';
+ const c=Math.round(Math.max(0,Math.min(1,(q.T+100)/130))*255),tc=`rgb(${60+c*.65|0},${120+c*.1|0},${200-c*.5|0})`;
+ $('ginfo').textContent=`${g.n}. ${g.std}.`;
+ $('req').innerHTML=`Test request: three ${g.id} bars at <span class="temp" style="background:${tc}">${q.T} °C</span>. Requirement: average of at least <b>${q.req} J</b>.`;
+ $('rb').innerHTML=[1,2,3].map(i=>`<tr><td>${i}</td><td id="e${i-1}">—</td></tr>`).join('');$('rd').textContent='—';
+ q.sp.forEach((s,i)=>face(i));upBtn();draw()}
+function upBtn(){$('bRun').disabled=run||idx>=3;$('bRun').textContent=idx>=3?'All three broken':`Break specimen ${idx+1} of 3`;$('bNew').disabled=run}
+const ang=K=>Math.acos(Math.cos(AL)+K*(1-Math.cos(AL))/300);
+function draw(){const d=devicePixelRatio||1,k=pc.clientWidth/340,x=px;x.setTransform(d*k,0,0,d*k,0,0);x.clearRect(0,0,340,390);
+ const cx=170,cy=162,L=165,ink=col('--ink'),mut=col('--mut'),hot=col('--hot'),be=ang(curK);
+ const th=tau<.5?AL*Math.cos(Math.PI/2*tau/.5):-be*Math.sin(Math.PI/2*Math.min(1,(tau-.5)/.5)),yb=cy+L;
+ x.strokeStyle=mut;x.fillStyle=mut;x.lineWidth=1;x.font='11px system-ui';x.textAlign='center';
+ x.beginPath();x.arc(cx,cy,105,Math.PI/2-AL,Math.PI/2);x.stroke();
+ for(let K=0;K<=300;K+=10){const b=ang(K),r=K%50?100:95;x.beginPath();x.moveTo(cx+r*Math.sin(b),cy+r*Math.cos(b));x.lineTo(cx+105*Math.sin(b),cy+105*Math.cos(b));x.stroke();if(!(K%50))x.fillText(K,cx+119*Math.sin(b),cy+119*Math.cos(b)+4)}
+ x.fillText('J',cx+75,cy+90);
+ x.fillStyle='#5c6b7a';x.fillRect(cx-45,yb+24,90,22);
+ if(tau<.5){x.fillStyle='#b9c4cf';x.fillRect(cx-7,yb+10,14,14)}
+ else if(tau<1){const s=(tau-.5)/.5;x.fillStyle='#b9c4cf';x.fillRect(cx+20+s*120,yb+10-40*s+110*s*s,12,12);x.fillRect(cx+8+s*90,yb+10-15*s+80*s*s,12,12)}
+ const hx=cx-L*Math.sin(th),hy=cy+L*Math.cos(th);
+ if(th<0||tau>0){const pb=th<0?-th:0;if(pb>0){x.strokeStyle=hot;x.lineWidth=3;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+105*Math.sin(pb),cy+105*Math.cos(pb));x.stroke()}}
+ x.strokeStyle=ink;x.lineWidth=5;x.beginPath();x.moveTo(cx,cy);x.lineTo(hx,hy);x.stroke();
+ x.fillStyle='#3d4b58';x.beginPath();x.arc(hx,hy,16,0,7);x.fill();x.beginPath();x.arc(cx,cy,6,0,7);x.fill()}
+function tick(now){if(!run)return;tau=Math.min(1,(now-t0)/3600);draw();if(tau<1)requestAnimationFrame(tick);else done()}
+function done(){const s=q.sp[idx];s.done=1;$('e'+idx).textContent=s.K;$('rd').textContent=s.K+' J';face(idx);idx++;run=0;upBtn();draw();if(idx==3)judgeUI()}
+$('bRun').onclick=()=>{if(run||idx>=3)return;run=1;curK=q.sp[idx].K;tau=0;upBtn();t0=performance.now();requestAnimationFrame(tick)};
+$('bNew').onclick=()=>load(1);
+function face(i){const cv=$('f'+i),x=cv.getContext('2d'),s=q.sp[i];if(!s.done){x.fillStyle=col('--soft');x.fillRect(0,0,100,100);return}
+ let a=s.seed;const rnd=()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+ const im=x.createImageData(100,100),b=1-s.sh/100,kk=Math.sqrt(b/.927),p1=rnd()*6,p2=rnd()*6;
+ for(let y=0;y<100;y++)for(let xx=0;xx<100;xx++){let v;const o=(y*100+xx)*4;
+  if(y<20)v=y>17?90:150+rnd()*10;
+  else{const dx=(xx-50)/50,dy=(y-60)/40,r=Math.pow(dx*dx*dx*dx+dy*dy*dy*dy,.25),t=Math.atan2(dy,dx);
+   v=b>0&&r/(kk*(1+.07*Math.sin(3*t+p1)+.05*Math.sin(7*t+p2)))<=1?205+rnd()*40:100+rnd()*18+8*Math.sin(y*.9)}
+  im.data[o]=im.data[o+1]=im.data[o+2]=v;im.data[o+3]=255}
+ x.putImageData(im,0,0);
+ if($('grid').checked){x.strokeStyle='rgba(217,115,31,.9)';x.lineWidth=1;x.beginPath();for(let k=0;k<=100;k+=20){x.moveTo(k+.5,20);x.lineTo(k+.5,100)}for(let y=20;y<=100;y+=20){x.moveTo(0,y+.5);x.lineTo(100,y+.5)}x.stroke()}}
+$('grid').onchange=()=>q.sp.forEach((s,i)=>face(i));
+function judgeUI(){
+ $('obs').textContent=g.note;
+ $('af').innerHTML=[1,2,3].map(i=>`<div class="f"><label for="sh${i-1}">% shear on specimen ${i} (estimate)</label><input id="sh${i-1}" type="number" min="0" max="100" inputmode="decimal"><span id="m${i-1}"></span></div>`).join('')+`<div class="f"><label for="av">Average energy of the three bars (J)</label><input id="av" type="number" step="any" inputmode="decimal"><span id="mav"></span></div>`;
+ $('rule').innerHTML=`To pass, all three must be true:<br>1. The average is at least ${q.req} J.<br>2. No more than one bar is below ${q.req} J.<br>3. No bar is below 70% of ${q.req} J, which is ${(.7*q.req).toFixed(1)} J.`;
+ $('bP').disabled=$('bF').disabled=0;$('s2').classList.remove('hide');$('s2').scrollIntoView({behavior:'smooth'})}
+$('bChk').onclick=()=>{let n=0;const v=verdict(q);q.sp.forEach((s,i)=>{const a=parseFloat($('sh'+i).value),ok=!isNaN(a)&&Math.abs(a-s.sh)<=10;n+=ok;$('m'+i).textContent=ok?'✓':'✗';$('m'+i).className=ok?'pass':'fail'});
+ const a=parseFloat($('av').value),ok=!isNaN(a)&&Math.abs(a-v.m)<=1;n+=ok;$('mav').textContent=ok?'✓':'✗';$('mav').className=ok?'pass':'fail';$('tally').textContent=n+' of 4 correct'};
+$('bShow').onclick=()=>{q.sp.forEach((s,i)=>$('sh'+i).value=s.sh);$('av').value=verdict(q).m.toFixed(1)};
+function decide(ans){const v=verdict(q);
+ $('res').innerHTML=`<p>${ans==v.ok?'<b class="pass">Correct.</b> ':'<b class="fail">Not quite.</b> '}This test <b class="${v.ok?'pass':'fail'}">${v.ok?'passes':'fails'}</b>${v.ok?'.':' because '+(!v.c1?'the average is below the requirement.':!v.c2?'more than one bar is below the requirement.':'one bar is below 70% of the requirement.')}</p>`;$('bP').disabled=$('bF').disabled=1}
+$('bP').onclick=()=>decide(true);$('bF').onclick=()=>decide(false);$('bPrn').onclick=()=>print();
+function size(){const d=devicePixelRatio||1;pc.width=pc.clientWidth*d;pc.height=pc.clientHeight*d;draw()}
+addEventListener('resize',size);size();load(0);
+</script></body></html>

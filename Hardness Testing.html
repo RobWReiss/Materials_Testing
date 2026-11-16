@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rockwell Hardness Test Simulator</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1d2a36;--mut:#5a6978;--line:#d8dfe6;--acc:#1b5f86;--hot:#d9731f;--ok:#1b7f4b;--bad:#b3261e;--soft:#e7eef4}
+@media(prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1e262e;--ink:#e6ebf0;--mut:#9aa8b6;--line:#34414d;--acc:#5ab0e0;--hot:#f0963f;--ok:#4cc98a;--bad:#ff8a80;--soft:#27333e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{background:#22323f;color:#fff;padding:18px 20px;border-bottom:4px solid var(--hot)}
+header h1{margin:0;font-size:1.4rem}header p{margin:2px 0 0;color:#b9c7d4;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.15rem}h3{margin:12px 0 6px;font-size:1rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px}button,input{font:inherit;color:inherit}
+.chip,.btn{border:1px solid var(--line);background:var(--soft);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn.go{background:var(--hot);color:#1a1006;border-color:var(--hot);font-weight:600}.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.mut{color:var(--mut);font-size:.92rem}
+canvas{display:block}#pc{width:100%;max-width:320px;aspect-ratio:320/330;background:var(--soft);border-radius:8px}
+.hide{display:none}.req{background:var(--soft);border-radius:8px;padding:10px 14px;margin:10px 0}
+table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+#lcd{display:inline-block;min-width:210px;padding:12px 16px;border-radius:8px;background:#1b2b22;color:#8dffb0;font:700 2rem/1 ui-monospace,Consolas,monospace;letter-spacing:.04em}
+#lcd.off{color:#ff9d8f}
+.f{display:grid;grid-template-columns:1fr 100px 28px;gap:8px;align-items:center;margin:6px 0}
+.f input{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);min-height:40px}
+details{background:var(--soft);border-radius:8px;padding:8px 12px;margin-bottom:16px}summary{cursor:pointer;font-weight:600}
+dt{font-weight:600;margin-top:6px}dd{margin:0;color:var(--mut)}
+.note{border-left:4px solid var(--hot);padding:6px 12px;background:var(--soft);margin:10px 0;border-radius:0 8px 8px 0}
+@media print{.noprint,.chips,.btn,details{display:none!important}body{background:#fff;color:#000}}
+</style></head><body>
+<header><h1>Rockwell Hardness Test Simulator</h1><p>Press a tiny indenter into steel and measure how hard it pushes back.</p></header>
+<main>
+<details class="noprint"><summary>New to this? What the words mean</summary><dl>
+<dt>Hardness</dt><dd>How well a steel resists being dented. Harder steel is usually stronger, but also more brittle.</dd>
+<dt>The Rockwell test</dt><dd>An indenter is pressed into the surface. The machine measures how deep the dent is. A shallow dent means hard steel and a bigger number.</dd>
+<dt>Preload and main load</dt><dd>A light load (10 kgf) seats the indenter and sets the zero. The heavy main load is then applied and removed, back to the light load. The depth of the dent left behind gives the reading.</dd>
+<dt>Why test several times?</dt><dd>Steel is never perfectly uniform, so three indents are made, well apart from each other, and the average is used.</dd></dl></details>
+
+<section class="card"><h2>1. Choose a steel and a scale</h2>
+<div class="chips" id="grades" role="group" aria-label="Steel grade"></div>
+<div class="req" id="req"></div>
+<table><thead><tr><th>Scale</th><th>Indenter and main load</th><th>Use it for</th><th>Reliable range</th></tr></thead>
+<tbody><tr><td><b>HRC</b></td><td>Diamond cone, 150 kgf</td><td>Hard steels: hardened, quenched and tempered, case-hardened. Roughly above 800 MPa tensile strength.</td><td>20 to 70</td></tr>
+<tr><td><b>HRB</b></td><td>1/16 inch steel ball, 100 kgf</td><td>Soft steels: as rolled, annealed, mild. Roughly below 800 MPa tensile strength.</td><td>20 to 100</td></tr></tbody></table>
+<p class="mut">Why two scales? A diamond cone on soft steel digs so deep that the scale runs out. A steel ball on hard steel flattens and the dent is too shallow to measure properly. The two scales are different rulers, so an HRC number cannot be compared with an HRB number. If the display says OFF SCALE, you chose the wrong one.</p>
+<div class="chips" id="scales" role="group" aria-label="Scale"><button class="chip" data-s="C" aria-pressed="false">HRC: diamond cone, 150 kgf</button><button class="chip" data-s="B" aria-pressed="false">HRB: steel ball, 100 kgf</button></div>
+<div class="row noprint" style="margin-top:12px"><button class="btn go" id="bRun">Make indent 1 of 3</button><button class="btn" id="bNew">New test request</button></div></section>
+
+<section class="card"><div class="row"><div><canvas id="pc" aria-label="Indenter and specimen"></canvas><p class="mut" id="stage" style="max-width:320px;min-height:3em">Choose a scale, then make the first indent. Not to scale.</p></div>
+<div style="flex:1;min-width:280px"><div id="lcd">-- --</div><p id="msg" class="mut" style="min-height:3em"></p>
+<table><thead><tr><th>Indent</th><th>Reading</th><th>Dent depth</th></tr></thead><tbody id="rb"></tbody></table>
+<p class="mut">The harder the steel, the shallower the dent. Each Rockwell point is 0.002 mm of depth.</p></div></div></section>
+
+<section class="card hide" id="s2"><h2>2. Judge the test</h2>
+<div class="row"><div style="flex:1;min-width:280px"><h3 style="margin-top:0">Your reading</h3><div id="af"></div>
+<p class="mut">Add the three readings and divide by 3. Give the answer to one decimal place.</p>
+<button class="btn" id="bChk">Check my answer</button> <button class="btn" id="bShow">Show answer</button> <span id="tally" class="mut"></span></div>
+<div style="flex:1;min-width:280px"><h3 style="margin-top:0">Specification</h3><p id="spec"></p>
+<p>The average must fall inside this range. <b>Does this steel pass?</b></p><div class="row noprint"><button class="btn" id="bP">Pass</button><button class="btn" id="bF">Fail</button><button class="btn" id="bPrn">Print report</button></div></div></div>
+<div id="res"></div></section>
+<p class="mut">Values are indicative, for education only. Hardness ranges depend on the heat treatment or supply condition, and those shown are typical or illustrative, not taken from a specific standard. Not for design or certification.</p>
+</main>
+<script>
+//MATH
+const N=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*Math.random())};
+const TC=[[20,238],[25,266],[30,302],[35,345],[40,392],[45,446],[50,513],[55,595],[60,697],[65,832]],TB=[[50,95],[60,107],[70,125],[80,150],[90,180],[100,240]];
+const lin=(t,x,a,b)=>{let i=1;while(i<t.length-1&&x>t[i][a])i++;const p=t[i-1],r=t[i];return p[b]+(x-p[a])*(r[b]-p[b])/(r[a]-p[a])};
+const toHV=(s,v)=>lin(s=='C'?TC:TB,v,0,1),fromHV=(s,h)=>lin(s=='C'?TC:TB,h,1,0),NN={C:100,B:130};
+const G=[
+{id:'S275',n:'S275 mild steel',conds:[['Hot rolled, as supplied','B',72,84],['Cold drawn bar','B',88,97]]},
+{id:'S355',n:'S355 structural steel',conds:[['Hot rolled, as supplied','B',80,92],['Cold drawn bar','B',90,97]]},
+{id:'S460',n:'S460 HSLA steel',conds:[['Normalised','B',87,96],['Quenched and tempered (S460Q)','C',21,28]]},
+{id:'C45',n:'C45 / 1045',conds:[['Annealed','B',84,94],['Quenched and tempered','C',21,26],['Quenched and lightly tempered','C',50,56]]},
+{id:'42CrMo4',n:'42CrMo4 / 4140',conds:[['Annealed','B',90,97],['Quenched and tempered, medium strength','C',34,39],['Quenched and tempered, high strength','C',39,44]]},
+{id:'8620',n:'8620',conds:[['Annealed','B',80,90],['Case hardened, tested on the case surface','C',58,62,1],['Case hardened, tested on the core of a cut section','C',24,31]]},
+{id:'304',n:'304 stainless',conds:[['Annealed','B',76,88],['Cold worked (quarter hard)','C',24,31]]},
+{id:'300M',n:'300M aerospace steel',conds:[['Annealed','C',27,33],['Quenched and tempered, aerospace condition','C',53,56]]}];
+function mkReq(g,prev){const cs=g.conds.filter(c=>!prev||c!==prev.c),c=cs[Math.floor(Math.random()*cs.length)]||g.conds[0],[,s,lo,hi]=c,w=hi-lo;
+ let m=(lo+hi)/2+N()*w*.45;m=s=='B'?Math.min(97,Math.max(55,m)):Math.min(66,Math.max(22,m));
+ const sd=s=='B'?.9:.6;return{c,m,r:[0,1,2].map(()=>{const v=Math.round((m+N()*sd)*10)/10;return s=='B'?Math.min(98.5,v):Math.max(21,v)})}}
+const avg=q=>Math.round(q.r.reduce((a,b)=>a+b)/3*10)/10,ok=q=>avg(q)>=q.c[2]&&avg(q)<=q.c[3];
+//END
+const $=id=>document.getElementById(id),pc=$('pc'),px=pc.getContext('2d');
+let g=G[0],q,sc=null,idx=0,run=0,t0=0,tau=0,dp=.1,sh='C';
+const col=n=>getComputedStyle(document.body).getPropertyValue(n);
+$('grades').innerHTML=G.map((x,i)=>`<button class="chip" data-i="${i}" aria-pressed="${!i}">${x.id}</button>`).join('');
+$('grades').onclick=e=>{const i=e.target.dataset.i;if(i==null||run)return;g=G[i];document.querySelectorAll('.chip[data-i]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.i==i));load(0)};
+$('scales').onclick=e=>{const s=e.target.dataset.s;if(!s||run||s==sc)return;sc=s;sh=s;document.querySelectorAll('.chip[data-s]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.s==s));
+ if(idx>0){idx=0;clearRows();$('s2').classList.add('hide');$('res').innerHTML='';$('msg').textContent='Scale changed, so the readings have been cleared. Start again.'}upBtn();draw()};
+function clearRows(){$('rb').innerHTML=[1,2,3].map(i=>`<tr><td>${i}</td><td id="v${i-1}">—</td><td id="d${i-1}">—</td></tr>`).join('');$('lcd').textContent='-- --';$('lcd').className=''}
+function load(keep){q=mkReq(g,keep?q:null);idx=0;run=0;tau=0;$('s2').classList.add('hide');$('res').innerHTML='';$('tally').textContent='';$('msg').textContent='';clearRows();
+ const c=q.c,hv=toHV(c[1],(c[2]+c[3])/2),hint=c[4]?'A very hard surface layer.':`Expected tensile strength: roughly ${Math.round(3.3*hv/10)*10} MPa.`;
+ $('req').innerHTML=`Test request: one <b>${g.id}</b> specimen, <b>${c[0].toLowerCase()}</b>. ${hint}`;upBtn();draw()}
+function upBtn(){$('bRun').disabled=run||idx>=3;$('bRun').textContent=idx>=3?'All three indents made':`Make indent ${idx+1} of 3`;$('bNew').disabled=run}
+const sm=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)};
+const dep=(t,d1,d0)=>t<.2?0:t<.45?d1*sm((t-.2)/.25):t<.55?d1:t<.75?d1-(d1-d0)*sm((t-.55)/.2):d0;
+function draw(){const d=devicePixelRatio||1,k=pc.clientWidth/320,x=px;x.setTransform(d*k,0,0,d*k,0,0);x.clearRect(0,0,320,330);
+ const cx=160,sf=190,K=230,M=sh=='B'?100:150,ink=col('--ink'),mut=col('--mut'),bg=col('--soft'),pd=dp*K,dm=pd*1.3,cur=tau>0?dep(tau,dm,pd):0,B=sh=='B';
+ const hw=dd=>B?Math.sqrt(Math.max(0,2*183*dd-dd*dd)):1.732*dd;
+ const edge=dd=>{const w=hw(dd);x.beginPath();x.moveTo(cx-w,sf);if(B)x.quadraticCurveTo(cx,sf+2*dd,cx+w,sf);else{x.lineTo(cx,sf+dd);x.lineTo(cx+w,sf)}};
+ const gr=x.createLinearGradient(0,sf,0,sf+110);gr.addColorStop(0,'#c9d2da');gr.addColorStop(1,'#8996a3');x.fillStyle=gr;x.fillRect(20,sf,280,110);
+ x.save();x.beginPath();x.rect(20,sf,280,110);x.clip();x.strokeStyle='rgba(60,75,90,.16)';x.lineWidth=1;x.beginPath();for(let i=-110;i<280;i+=12){x.moveTo(20+i,sf+110);x.lineTo(130+i,sf)}x.stroke();
+ if(cur>1){const w=hw(cur);for(let i=1;i<=5;i++){x.strokeStyle=`rgba(40,55,70,${.38-.06*i})`;x.lineWidth=1.2;x.beginPath();x.ellipse(cx,sf,w+i*13,cur+i*13,0,0,Math.PI);x.stroke()}}x.restore();
+ if(cur>.5){edge(cur);x.closePath();x.fillStyle=bg;x.fill();edge(cur);x.strokeStyle='#4f5d6b';x.lineWidth=1.5;x.stroke();
+  const w=hw(cur);x.fillStyle='#d3dae1';[-1,1].forEach(s=>{x.beginPath();x.ellipse(cx+s*(w+4),sf-1,5,2.2,0,0,7);x.fill()})}
+ const tip=tau<.15?sf-70*(1-sm(tau/.15)):tau<.85?sf+cur:sf+pd-(pd+70)*sm((tau-.85)/.15);
+ if(B){x.save();x.beginPath();x.rect(0,tip-44,320,200);x.clip();const rg=x.createRadialGradient(cx-50,tip-50,5,cx,tip-183,183);rg.addColorStop(0,'#e4eaef');rg.addColorStop(1,'#3a4651');x.fillStyle=rg;x.beginPath();x.arc(cx,tip-183,183,0,7);x.fill();x.restore();
+  x.fillStyle='#56636f';x.beginPath();x.moveTo(cx-119,tip-44);x.lineTo(cx+119,tip-44);x.lineTo(cx+60,tip-120);x.lineTo(cx-60,tip-120);x.closePath();x.fill()}
+ else{x.fillStyle='#56636f';x.fillRect(cx-32,tip-120,64,80);x.fillStyle='#aee3f0';x.strokeStyle='#5b8ea0';x.lineWidth=1.2;x.beginPath();x.moveTo(cx,tip);x.lineTo(cx-69,tip-40);x.lineTo(cx+69,tip-40);x.closePath();x.fill();x.stroke();
+  x.strokeStyle='rgba(255,255,255,.8)';x.beginPath();x.moveTo(cx,tip);x.lineTo(cx-20,tip-40);x.stroke()}
+ if(tau>=.45&&tau<.85){x.setLineDash([4,3]);x.strokeStyle=mut;x.lineWidth=1;x.beginPath();x.moveTo(cx+hw(dm)+8,sf+dm);x.lineTo(cx+135,sf+dm);x.stroke();x.setLineDash([]);x.fillStyle=mut;x.font='11px system-ui';x.textAlign='right';x.fillText('deepest',314,sf+dm-3)}
+ x.textAlign='center';x.font='12px system-ui';x.fillStyle=mut;
+ if(tau>=.75){const xa=cx+125;x.strokeStyle=ink;x.lineWidth=1;x.setLineDash([3,3]);x.beginPath();x.moveTo(cx+hw(pd)+6,sf);x.lineTo(xa+10,sf);x.moveTo(cx+6,sf+pd);x.lineTo(xa+10,sf+pd);x.stroke();x.setLineDash([]);
+  x.beginPath();x.moveTo(xa,sf);x.lineTo(xa,sf+pd);x.stroke();x.fillStyle=ink;x.beginPath();x.moveTo(xa,sf);x.lineTo(xa-3,sf+6);x.lineTo(xa+3,sf+6);x.fill();x.beginPath();x.moveTo(xa,sf+pd);x.lineTo(xa-3,sf+pd-6);x.lineTo(xa+3,sf+pd-6);x.fill();
+  x.fillText('Permanent dent depth = '+dp.toFixed(3)+' mm',cx,324)}else x.fillText('Magnified cross-section of the steel',cx,324);
+ const ld=tau==0?0:tau<.2?10:tau<.45?10+(M-10)*sm((tau-.2)/.25):tau<.55?M:tau<.75?M-(M-10)*sm((tau-.55)/.2):tau<.85?10:0;
+ x.fillStyle=ink;x.font='600 11px system-ui';x.textAlign='left';x.fillText('Load '+Math.round(ld)+' kgf',4,14);x.strokeStyle=mut;x.strokeRect(8.5,22.5,12,160);x.fillStyle='#d9731f';x.fillRect(9,23+159*(1-ld/M),11,159*ld/M);
+ $('stage').textContent=tau==0?'Choose a scale, then make the indent. Not to scale.':tau<.2?'Indenter lowered onto the steel. The 10 kgf preload sets the zero point.':tau<.45?'Main load rising: the steel is pushed aside and the dent forms.':tau<.55?'Main load held at full value.':tau<.75?'Main load removed. The steel springs back a little, but a permanent dent remains.':tau<.85?'Back at preload. The permanent dent depth is measured now.':'Indenter withdrawn. The dent left behind gives the hardness reading.'}
+function tick(now){if(!run)return;tau=Math.min(1,(now-t0)/4200);draw();if(tau<1)requestAnimationFrame(tick);else done()}
+let wrong=0,HR=0;
+$('bRun').onclick=()=>{if(run||idx>=3)return;if(!sc){$('msg').textContent='Choose a scale first: HRC or HRB.';return}
+ const c=q.c,hv=toHV(c[1],q.r[idx]);$('msg').textContent='';
+ if(sc==c[1]){wrong=0;HR=q.r[idx];dp=(NN[sc]-HR)*.002}else{wrong=1;HR=fromHV(sc,hv);dp=Math.min(.25,Math.max(.03,(NN[sc]-HR)*.002))}
+ run=1;tau=0;upBtn();t0=performance.now();requestAnimationFrame(tick)};
+function done(){run=0;const L=$('lcd');
+ if(wrong){L.textContent='OFF SCALE';L.className='off';$('msg').textContent=sc=='B'?'This steel is too hard for HRB: the reading would be above 100, where the ball can flatten and the result cannot be trusted. Switch to HRC.':'This steel is too soft for HRC: the reading would be below 20, where the dent is too deep to trust. Switch to HRB.'}
+ else{L.className='';L.textContent='HR'+sc+' '+HR.toFixed(1);$('v'+idx).textContent=HR.toFixed(1)+' HR'+sc;$('d'+idx).textContent=dp.toFixed(3)+' mm';idx++;if(idx==3)judgeUI()}
+ upBtn();draw()}
+$('bNew').onclick=()=>load(1);
+function judgeUI(){const c=q.c;$('af').innerHTML=`<div class="f"><label for="av">Average hardness (HR${c[1]})</label><input id="av" type="number" step="any" inputmode="decimal"><span id="mav"></span></div>`;
+ $('spec').innerHTML=`<b>${c[2]} to ${c[3]} HR${c[1]}</b> for ${g.id}, ${c[0].toLowerCase()}.`;$('bP').disabled=$('bF').disabled=0;$('s2').classList.remove('hide');$('s2').scrollIntoView({behavior:'smooth'})}
+$('bChk').onclick=()=>{const a=parseFloat($('av').value),o=!isNaN(a)&&Math.abs(a-avg(q))<=.2;$('mav').textContent=o?'✓':'✗';$('mav').className=o?'pass':'fail';$('tally').textContent=o?'Correct':'Not quite: add the three readings and divide by 3'};
+$('bShow').onclick=()=>$('av').value=avg(q).toFixed(1);
+function decide(ans){const c=q.c,a=avg(q),o=ok(q),hv=toHV(c[1],a),rm=Math.round(3.3*hv/10)*10;
+ $('res').innerHTML=`<p>${ans==o?'<b class="pass">Correct.</b> ':'<b class="fail">Not quite.</b> '}This steel <b class="${o?'pass':'fail'}">${o?'passes':'fails'}</b>${o?'.':', because the average is '+(a<c[2]?'below':'above')+' the range.'}</p>
+<div class="note"><b>Link to the tensile test.</b> Hardness and tensile strength rise together, so a quick hardness test can estimate strength without breaking a bar. ${c[4]?'A hardened case is only a thin layer, so this rule does not apply to it. Test the core to estimate the strength of the part.':`An average of ${a.toFixed(1)} HR${c[1]} is about ${Math.round(hv)} HV, which suggests a tensile strength of roughly ${rm} MPa (strength ≈ 3.3 × HV). It is a rough rule for carbon and low-alloy steels, and less reliable for stainless steel.`}</div>`;$('bP').disabled=$('bF').disabled=1}
+$('bP').onclick=()=>decide(true);$('bF').onclick=()=>decide(false);$('bPrn').onclick=()=>print();
+function size(){const d=devicePixelRatio||1;pc.width=pc.clientWidth*d;pc.height=pc.clientHeight*d;draw()}
+addEventListener('resize',size);size();load(0);
+</script></body></html>

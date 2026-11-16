@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jominy End Quench Simulator</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1d2a36;--mut:#5a6978;--line:#d8dfe6;--acc:#1b5f86;--hot:#d9731f;--ok:#1b7f4b;--bad:#b3261e;--soft:#e7eef4}
+@media(prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1e262e;--ink:#e6ebf0;--mut:#9aa8b6;--line:#34414d;--acc:#5ab0e0;--hot:#f0963f;--ok:#4cc98a;--bad:#ff8a80;--soft:#27333e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{background:#22323f;color:#fff;padding:18px 20px;border-bottom:4px solid var(--hot)}
+header h1{margin:0;font-size:1.4rem}header p{margin:2px 0 0;color:#b9c7d4;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.15rem}h3{margin:12px 0 6px;font-size:1rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px}button,input{font:inherit;color:inherit}
+.chip,.btn{border:1px solid var(--line);background:var(--soft);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn.go{background:var(--hot);color:#1a1006;border-color:var(--hot);font-weight:600}.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.mut{color:var(--mut);font-size:.92rem}
+.hide{display:none}canvas{display:block;width:100%}#bar{height:120px;background:var(--soft);border-radius:8px 8px 0 0}#plot{height:320px;border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px}
+.req{background:var(--soft);border-radius:8px;padding:10px 14px;margin:10px 0}
+table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+#lcd{display:inline-block;min-width:200px;padding:12px 16px;border-radius:8px;background:#1b2b22;color:#8dffb0;font:700 1.8rem/1 ui-monospace,Consolas,monospace;letter-spacing:.04em}
+.f{display:grid;grid-template-columns:1fr 100px 28px;gap:8px;align-items:center;margin:6px 0}
+.f input{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);min-height:40px}
+.note{border-left:4px solid var(--hot);padding:6px 12px;background:var(--soft);margin:10px 0;border-radius:0 8px 8px 0}
+dt{font-weight:600;margin-top:8px}dd{margin:0;color:var(--mut)}
+@media print{.noprint,.btn,.chip{display:none!important}body{background:#fff;color:#000}}
+</style></head><body>
+<header><h1>Jominy End Quench Simulator</h1><p>Quench one end of a hot steel bar and see how deep the hardening reaches.</p></header>
+<main>
+<section class="card"><h2>Why do we do this test?</h2>
+<div class="row"><div style="flex:2;min-width:300px">
+<p style="margin-top:0">To harden steel, you heat it red hot and cool it fast, which is called quenching. Fast cooling makes the steel hard. Slow cooling leaves it softer.</p>
+<p>In a long product mill, the same grade of steel is rolled into bars of many different diameters. When a bar is quenched, the outside cools fast, but the <b>middle of a thick bar cools slowly</b>. A thin bar can harden all the way through, while a thick bar of the very same steel may stay soft in the middle.</p>
+<p>The Jominy test measures this in a standard way. One end of a hot test bar is sprayed with water, so that end cools very fast and the far end cools slowly. One bar therefore shows every cooling speed at once. Hardness along the bar tells us <b>how deep the hardening reaches</b>, which tells us what size of bar the steel can harden through.</p>
+<dl style="margin:0"><dt>Carbon</dt><dd>decides how hard the steel can get, at the quenched end.</dd><dt>Alloying elements</dt><dd>such as chromium, molybdenum and nickel decide how far the hardness reaches along the bar.</dd></dl></div>
+<svg viewBox="0 0 260 230" width="260" role="img" aria-label="Thin bar hard all through, thick bar soft in the middle" style="flex:1;min-width:220px;max-width:300px">
+<circle cx="60" cy="50" r="30" fill="#1b5f86"/><text x="105" y="46" font-size="12" fill="currentColor">Thin bar:</text><text x="105" y="62" font-size="12" fill="currentColor">hard all through</text>
+<circle cx="70" cy="155" r="60" fill="#1b5f86"/><circle cx="70" cy="155" r="30" fill="#b9c7d4"/><text x="140" y="146" font-size="12" fill="currentColor">Thick bar:</text><text x="140" y="162" font-size="12" fill="currentColor">hard outside,</text><text x="140" y="178" font-size="12" fill="currentColor">soft in the middle</text>
+<text x="10" y="224" font-size="11" fill="currentColor" opacity=".7">Same steel, same quench. Cross-sections.</text></svg></div></section>
+
+<section class="card"><h2>1. Choose a steel and read the test request</h2>
+<div class="chips" id="grades" role="group" aria-label="Steel grade"></div>
+<div class="req" id="req"></div>
+<div class="row noprint"><button class="btn go" id="bRun">Heat and quench the bar</button><button class="btn" id="bNew">New test request</button></div></section>
+
+<section class="card"><h2>2. Heat, quench and measure</h2>
+<p class="note" id="stage" style="margin-top:0">Press "Heat and quench the bar" to begin. The bar here is 25 mm across and 100 mm long. Only the first 45 mm from the quenched end are shown.</p>
+<div><canvas id="bar" aria-label="Test bar"></canvas><canvas id="plot" aria-label="Hardness graph"></canvas></div>
+<div class="row" style="margin-top:12px"><div><div id="lcd">-- --</div><p class="mut" id="msg" style="margin:6px 0">Hardness is measured at set distances from the quenched end.</p>
+<button class="btn go noprint" id="bRead" disabled>Take reading</button></div>
+<div style="flex:1;min-width:260px"><table><thead><tr><th>Distance from quenched end</th><th>Hardness</th></tr></thead><tbody id="rb"></tbody></table></div></div>
+<p class="note">Carbon sets how hard the quenched end gets. Alloying elements decide how far along the bar the hardness reaches.</p></section>
+
+<section class="card hide" id="s3"><h2>3. Read the curve and judge the steel</h2><p id="gnote" class="note" style="margin-top:0"></p>
+<div class="row"><div style="flex:1;min-width:280px"><h3 style="margin-top:0">Your reading from the graph</h3>
+<p>How far from the quenched end is the steel still harder than 40 HRC? Follow the dashed 40 HRC line on the graph.</p>
+<div class="f"><label for="ad">Distance (mm)</label><input id="ad" type="number" step="any" inputmode="decimal"><span id="mk"></span></div>
+<p class="mut">Enter 0 if it is never above 40 HRC. Enter 40 if it is still above 40 HRC at the far end.</p>
+<button class="btn" id="bChk">Check my answer</button> <button class="btn" id="bShow">Show answer</button> <span id="tally" class="mut"></span></div>
+<div style="flex:1;min-width:280px"><h3 style="margin-top:0">Does the steel meet the requirement?</h3><p id="spec"></p>
+<div class="row noprint"><button class="btn" id="bP">Pass</button><button class="btn" id="bF">Fail</button><button class="btn" id="bPrn">Print report</button></div></div></div>
+<div id="res"></div></section>
+<p class="mut">Values are indicative, for education only. Requirements are illustrative, and real limits depend on the customer and the standard. Hardness below 20 HRC is too soft for the HRC scale. Not for design or certification.</p>
+</main>
+<script>
+//MATH
+const D=[1.5,3,5,8,12,16,25,40],N=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*Math.random())},R=(a,b)=>a+(b-a)*Math.random();
+const G=[
+{id:'C45',n:'C45 / 1045',hm:[56,60],hl:22,d50:4,k:3,reqs:[[3,45],[5,38],[8,26]],note:'A medium carbon steel with little alloying. The quenched end gets very hard, but the hardness drops away within a few millimetres.'},
+{id:'42CrMo4',n:'42CrMo4 / 4140',hm:[55,59],hl:28,d50:33,k:2.5,reqs:[[16,52],[25,47],[40,38]],note:'Chromium and molybdenum let the hardness reach much deeper, so thicker bars harden further in.'},
+{id:'8620',n:'8620',hm:[41,45],hl:20.5,d50:9,k:2.2,reqs:[[5,36],[12,28],[25,24]],note:'Low carbon, so it never gets very hard even at the quenched end. Nickel, chromium and molybdenum give it moderate depth.'},
+{id:'300M',n:'300M aerospace steel',hm:[58,61],hl:42,d50:70,k:2,reqs:[[16,59],[25,57],[40,54]],note:'A highly alloyed steel. It is very hard at the quenched end and still very hard far along the bar.'},
+{id:'S355',n:'S355 structural steel',hm:[36,42],hl:12,d50:2.5,k:3,reqs:[[1.5,32],[1.5,37],[3,22]],note:'Low carbon and little alloying, so it barely hardens at all, and only right at the quenched end. Soft readings are below the HRC scale.'},
+{id:'304',n:'304 stainless',flat:1,hm:[14,14],hl:14,d50:1,k:1,reqs:[[1.5,30],[3,25]],note:'Austenitic stainless steel does not harden by quenching, because its structure does not change as it cools. The line is flat and below the HRC scale.'}];
+function mk(g,prev){const rs=g.reqs.filter(r=>!prev||r!==prev.r),r=rs[Math.floor(Math.random()*rs.length)]||g.reqs[0],hm=R(...g.hm),hl=g.hl+N()*1.2,d50=g.d50*Math.exp(N()*.15),
+ v=D.map(d=>Math.round((g.flat?R(12,15):hl+(hm-hl)/(1+Math.pow(d/d50,g.k))+N()*.8)*10)/10);return{r,v}}
+const pass=q=>q.v[D.indexOf(q.r[0])]>=q.r[1];
+function d40(v){if(v[0]<40)return 0;for(let i=1;i<8;i++)if(v[i]<40)return D[i-1]+(v[i-1]-40)/(v[i-1]-v[i])*(D[i]-D[i-1]);return 40}
+//END
+const $=id=>document.getElementById(id),bc=$('bar'),pc=$('plot'),bx=bc.getContext('2d'),px=pc.getContext('2d');
+let g=G[0],q,idx=0,run=0,t0=0,tau=0,done=0;const ML=62,MR=16,XM=45;
+const col=n=>getComputedStyle(document.body).getPropertyValue(n);
+$('grades').innerHTML=G.map((x,i)=>`<button class="chip" data-i="${i}" aria-pressed="${!i}">${x.id}</button>`).join('');
+$('grades').onclick=e=>{const i=e.target.dataset.i;if(i==null||run)return;g=G[i];document.querySelectorAll('.chip[data-i]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.i==i));load(0)};
+const show=v=>v<20?'<20 HRC':v.toFixed(1)+' HRC';
+function load(keep){q=mk(g,keep?q:null);idx=0;run=0;tau=0;done=0;$('s3').classList.add('hide');$('res').innerHTML='';$('tally').textContent='';$('ad').value='';$('mk').textContent='';
+ $('req').innerHTML=`Test request: one <b>${g.id}</b> Jominy bar. Requirement: at least <b>${q.r[1]} HRC at ${q.r[0]} mm</b> from the quenched end.`;
+ $('rb').innerHTML=D.map((d,i)=>`<tr><td>${d} mm</td><td id="h${i}">—</td></tr>`).join('');$('lcd').textContent='-- --';$('bRun').disabled=0;$('bRead').disabled=1;$('bRead').textContent='Take reading';
+ $('stage').textContent='Press "Heat and quench the bar" to begin. The bar here is 25 mm across and 100 mm long. Only the first 45 mm from the quenched end are shown.';$('msg').textContent='Hardness is measured at set distances from the quenched end.';draw()}
+const stops=[[0,[140,151,162]],[.15,[109,43,43]],[.45,[192,57,43]],[.75,[240,112,30]],[1,[255,179,71]]];
+const cl=h=>{h=Math.max(0,Math.min(1,h));let i=1;while(i<stops.length-1&&h>stops[i][0])i++;const a=stops[i-1],b=stops[i],t=(h-a[0])/(b[0]-a[0]);return`rgb(${a[1].map((v,j)=>Math.round(v+(b[1][j]-v)*t)).join(',')})`};
+const tc=d=>.04+.012*Math.pow(d,1.3),sm=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)};
+function hot(d){if(tau<.3)return sm(tau/.3);if(tau<.85)return Math.exp(-((tau-.3)/.55)/tc(d));return Math.exp(-1/tc(d))*(1-(tau-.85)/.15)}
+function draw(){const W=bc.clientWidth,x=bx,d0=devicePixelRatio||1;
+ [bc,pc].forEach(c=>{if(c.width!=c.clientWidth*d0){c.width=c.clientWidth*d0;c.height=c.clientHeight*d0}});
+ x.setTransform(d0,0,0,d0,0,0);x.clearRect(0,0,W,120);const X=d=>ML+d/XM*(W-ML-MR),ink=col('--ink'),mut=col('--mut'),line=col('--line'),acc=col('--acc'),hotc=col('--hot'),y0=34,y1=82;
+ const gr=x.createLinearGradient(X(0),0,X(XM),0);for(let i=0;i<=24;i++)gr.addColorStop(i/24,cl(hot(XM*i/24)));
+ x.fillStyle=gr;x.fillRect(X(0),y0,X(XM)-X(0)+MR-4,y1-y0);x.strokeStyle=mut;x.lineWidth=1;x.strokeRect(X(0),y0,X(XM)-X(0)+MR-4,y1-y0);
+ if(tau>=.3&&tau<.85){x.strokeStyle='#4aa3df';x.lineWidth=3;x.setLineDash([8,6]);x.lineDashOffset=-tau*500;for(let i=0;i<5;i++){x.beginPath();x.moveTo(6,y0+8+i*8);x.lineTo(X(0)-3,y0+8+i*8);x.stroke()}x.setLineDash([])}
+ x.fillStyle=mut;x.font='11px system-ui';x.textAlign='center';x.fillText('water jet',30,y0-6);x.fillText('quenched end',X(0)+36,y0-6);x.fillText('bar continues →',W-MR-60,y0-6);
+ D.forEach((d,i)=>{x.fillStyle=i<idx?mut:i==idx&&done?hotc:line;x.beginPath();x.arc(X(d),(y0+y1)/2,i==idx&&done?6:4,0,7);x.fill();x.fillStyle=ink;x.font='10px system-ui';x.fillText(d,X(d),y1+14)});
+ x.fillStyle=mut;x.textAlign='left';x.fillText('Not to scale across the bar',X(0),y1+30);
+ const Hh=pc.clientHeight,p=px,YM=65,Y0=10,Y=v=>Hh-44-(v-Y0)/(YM-Y0)*(Hh-14-44);p.setTransform(d0,0,0,d0,0,0);p.clearRect(0,0,W,Hh);p.font='12px system-ui';p.lineWidth=1;
+ p.fillStyle='rgba(120,130,140,.18)';p.fillRect(ML,Y(20),W-ML-MR,Y(Y0)-Y(20));p.fillStyle=mut;p.textAlign='left';p.fillText('Too soft for the HRC scale',ML+6,Y(Y0)-6);
+ for(let v=Y0;v<=YM;v+=10){p.strokeStyle=line;p.beginPath();p.moveTo(ML,Y(v));p.lineTo(W-MR,Y(v));p.stroke();p.fillStyle=mut;p.textAlign='right';p.fillText(v,ML-6,Y(v)+4)}
+ for(let d=0;d<=XM;d+=5){p.strokeStyle=line;p.beginPath();p.moveTo(X(d),Y(YM));p.lineTo(X(d),Y(Y0));p.stroke();p.fillStyle=mut;p.textAlign='center';p.fillText(d,X(d),Hh-26)}
+ p.fillText('Distance from the quenched end (mm)',ML+(W-ML-MR)/2,Hh-8);p.save();p.translate(14,14+(Hh-58)/2);p.rotate(-Math.PI/2);p.fillText('Hardness (HRC)',0,0);p.restore();
+ p.setLineDash([6,4]);p.strokeStyle=ink;p.beginPath();p.moveTo(ML,Y(40));p.lineTo(W-MR,Y(40));p.stroke();p.setLineDash([]);p.fillStyle=ink;p.textAlign='right';p.fillText('40 HRC',W-MR-4,Y(40)-4);
+ p.strokeStyle=hotc;p.lineWidth=2;const[rd,rx]=q.r;p.beginPath();p.moveTo(X(rd)-7,Y(rx)-7);p.lineTo(X(rd)+7,Y(rx)+7);p.moveTo(X(rd)+7,Y(rx)-7);p.lineTo(X(rd)-7,Y(rx)+7);p.stroke();p.fillStyle=hotc;p.textAlign='left';p.fillText('Requirement',X(rd)+10,Y(rx)-8);
+ const yy=i=>Y(Math.max(q.v[i],15));p.strokeStyle=acc;p.lineWidth=2.5;p.beginPath();for(let i=0;i<idx;i++)i?p.lineTo(X(D[i]),yy(i)):p.moveTo(X(D[i]),yy(i));p.stroke();
+ for(let i=0;i<idx;i++){p.beginPath();p.arc(X(D[i]),yy(i),5,0,7);p.fillStyle=q.v[i]<20?col('--card'):acc;p.fill();p.strokeStyle=acc;p.lineWidth=2;p.stroke()}}
+function tick(now){if(!run)return;tau=Math.min(1,(now-t0)/7500);
+ $('stage').textContent=tau<.3?'Heating: the bar is heated until it glows orange-red (about 850 to 925 °C, depending on the steel) and held until it is the same temperature all through.':tau<.85?'Quenching: the bar is moved to the rig and a jet of water sprays the bottom end only. That end cools extremely fast. The far end cools slowly, like the middle of a thick bar.':'Cooling down: the bar is left to cool completely.';
+ draw();if(tau<1)requestAnimationFrame(tick);else{run=0;done=1;$('bRead').disabled=0;$('stage').textContent='The bar has cooled. Now hardness is measured along its length, starting at the quenched end.';$('bRead').textContent='Take reading at '+D[0]+' mm';draw()}}
+$('bRun').onclick=()=>{if(run||done)return;run=1;$('bRun').disabled=1;t0=performance.now();requestAnimationFrame(tick)};
+$('bNew').onclick=()=>{if(!run)load(1)};
+$('bRead').onclick=()=>{if(!done||idx>=8)return;const v=q.v[idx];$('lcd').textContent=show(v).replace(' HRC','').replace('<20','<20')+' HRC';$('h'+idx).textContent=show(v);
+ $('msg').textContent=v<20?`At ${D[idx]} mm the steel is too soft to read on the HRC scale.`:`Reading at ${D[idx]} mm.`;idx++;
+ $('bRead').textContent=idx<8?'Take reading at '+D[idx]+' mm':'All readings taken';$('bRead').disabled=idx>=8;draw();
+ if(idx==8){$('gnote').textContent=g.note;$('spec').innerHTML=`Requirement: at least <b>${q.r[1]} HRC at ${q.r[0]} mm</b>. Use your table of readings.`;$('s3').classList.remove('hide');$('s3').scrollIntoView({behavior:'smooth'})}};
+$('bChk').onclick=()=>{const a=parseFloat($('ad').value),t=d40(q.v),o=!isNaN(a)&&(t==0?a<=1:Math.abs(a-t)<=Math.max(3,.15*t));$('mk').textContent=o?'✓':'✗';$('mk').className=o?'pass':'fail';$('tally').textContent=o?'Correct':'Not quite: find where the curve crosses the dashed 40 HRC line'};
+$('bShow').onclick=()=>$('ad').value=d40(q.v).toFixed(1);
+function decide(ans){const o=pass(q),i=D.indexOf(q.r[0]),v=q.v[i];
+ $('res').innerHTML=`<p>${ans==o?'<b class="pass">Correct.</b> ':'<b class="fail">Not quite.</b> '}At ${q.r[0]} mm the steel reads ${v<20?'below 20 HRC':v.toFixed(1)+' HRC'}, ${o?'at or above':'below'} the requirement of ${q.r[1]} HRC, so it <b class="${o?'pass':'fail'}">${o?'passes':'fails'}</b>.</p>
+<div class="note"><b>Why this matters in the mill.</b> The centre of a thick bar cools slowly when it is quenched, like the far end of the Jominy bar. The centre of a thin bar cools quickly, like the quenched end. If a customer needs a thick bar to be hard in the middle, the steel must still be hard far along the Jominy bar. That is how Jominy results help decide which grade suits which bar size.</div>`}
+$('bP').onclick=()=>decide(true);$('bF').onclick=()=>decide(false);$('bPrn').onclick=()=>print();
+addEventListener('resize',draw);load(0);
+</script></body></html>

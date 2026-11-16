@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tensile Test Simulator</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1d2a36;--mut:#5a6978;--line:#d8dfe6;--acc:#1b5f86;--hot:#d9731f;--ok:#1b7f4b;--bad:#b3261e;--soft:#e7eef4}
+@media(prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1e262e;--ink:#e6ebf0;--mut:#9aa8b6;--line:#34414d;--acc:#5ab0e0;--hot:#f0963f;--ok:#4cc98a;--bad:#ff8a80;--soft:#27333e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{background:#22323f;color:#fff;padding:18px 20px;border-bottom:4px solid var(--hot)}
+header h1{margin:0;font-size:1.4rem}header p{margin:2px 0 0;color:#b9c7d4;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.15rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+button,select,input{font:inherit;color:inherit}
+.chip,.btn{border:1px solid var(--line);background:var(--soft);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn.go{background:var(--hot);color:#1a1006;border-color:var(--hot);font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.mut{color:var(--mut);font-size:.92rem}
+canvas{display:block;background:var(--card);border-radius:8px}
+#sc{width:200px;height:380px;background:var(--soft)}#plotw{flex:1;min-width:300px}#plot{width:100%;height:380px;touch-action:pan-y;border:1px solid var(--line)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.stat{background:var(--soft);border-radius:8px;padding:6px 10px}.stat b{display:block;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.hide{display:none}
+table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+.f{display:grid;grid-template-columns:1fr 110px 30px;gap:8px;align-items:center;margin:6px 0}
+.f input{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);min-height:40px}
+details{background:var(--soft);border-radius:8px;padding:8px 12px;margin-bottom:16px}summary{cursor:pointer;font-weight:600}
+dt{font-weight:600;margin-top:6px}dd{margin:0;color:var(--mut)}
+.note{border-left:4px solid var(--hot);padding:6px 12px;background:var(--soft);margin:10px 0;border-radius:0 8px 8px 0}
+@media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}#sc{width:100%;height:300px}}
+@media print{header~*:not(main),.noprint,.chips,.btn,details{display:none!important}body{background:#fff;color:#000}}
+</style></head><body>
+<header><h1>Tensile Test Simulator</h1><p>Pull a steel bar until it breaks, then read its strength from the curve.</p></header>
+<main>
+<details class="noprint"><summary>New to this? What the words mean</summary><dl>
+<dt>Stress and strain</dt><dd>Stress is the pulling force divided by the bar's cross-section area (MPa). Strain is how much longer it gets, as a percentage of its starting length.</dd>
+<dt>Young's modulus (E)</dt><dd>Stiffness. The slope of the straight part of the curve. Steel is about 200 GPa whatever its strength.</dd>
+<dt>Yield strength</dt><dd>Where the steel stops springing back and starts to stretch permanently. Some mild steels show a sudden peak and dip, others bend gradually, so we use one method for every steel: the 0.2% proof strength (Rp0.2). Draw a line parallel to the straight part of the curve, shifted 0.2% to the right, and read the stress where it crosses the curve.</dd>
+<dt>Ultimate tensile strength (Rm)</dt><dd>The highest stress on the curve, just before the bar starts to neck.</dd>
+<dt>Elongation (A) and reduction of area (Z)</dt><dd>How much stretch and thinning the bar survives: measures of ductility. Measure the broken bar, then calculate.</dd></dl></details>
+
+<section class="card"><h2>1. Choose a steel and load a specimen</h2>
+<div class="chips" id="grades" role="group" aria-label="Steel grade"></div>
+<p id="ginfo" class="mut"></p>
+<div class="row noprint"><button class="btn" id="bNew">Load a new specimen</button>
+<label>Test speed <select id="speed"><option value="14000">Slow</option><option value="8000" selected>Normal</option><option value="3500">Fast</option></select></label>
+<button class="btn go" id="bRun">Start test</button></div>
+<p class="mut">Round bar, diameter 10 mm, gauge length 50 mm, cross-section 78.5 mm². Every specimen is slightly different, as in a real batch.</p></section>
+
+<section class="card"><div class="row"><canvas id="sc" aria-label="Specimen"></canvas>
+<div id="plotw"><div class="stats"><div class="stat">Force<b id="rF">0 kN</b></div><div class="stat">Stress<b id="rS">0 MPa</b></div><div class="stat">Strain<b id="rE">0 %</b></div><div class="stat">Extension<b id="rX">0 mm</b></div></div>
+<canvas id="plot"></canvas><p class="mut" id="cur">Run the test, then move your finger or mouse along the curve to read values.</p></div></div></section>
+
+<section class="card hide" id="s2"><h2>2. Read the results from the curve</h2>
+<p id="gnote" class="note"></p>
+<div class="row noprint"><span><button class="chip" id="vF" aria-pressed="true">Full curve</button> <button class="chip" id="vZ" aria-pressed="false">Zoom: start of curve</button></span>
+<label><input type="checkbox" id="guided" checked> Guided (show markers, 0.2% line fixed)</label></div>
+<div class="row noprint" style="margin-top:8px"><label>Offset line shift: <b id="offv">0.20 %</b> <input type="range" id="off" min="0" max="1" step="0.01" value="0.2"></label></div>
+<p class="mut">The orange line is parallel to the elastic slope and shifted right by the amount above. Zoom in to see it clearly.</p>
+<div class="row"><div style="flex:1;min-width:280px"><h3 style="margin:8px 0">How to find Young's modulus (E)</h3>
+<p class="mut" style="margin:0">E is the slope of the straight part of the curve: how much stress it takes to stretch the steel by a given amount.</p>
+<ol><li>Click <b>Zoom: start of curve</b> so the straight part fills the graph.</li><li>Move along the straight part and note the stress and strain at two points, well apart but both on the straight line.</li><li>Subtract the lower point from the upper: <b>E = (stress 2 − stress 1) ÷ (strain 2 − strain 1)</b>.</li><li>The graph shows strain in %, so divide by 100 first (0.10 % = 0.0010).</li><li>The answer is in MPa. Divide by 1000 for GPa.</li></ol>
+<p class="mut">Example: stress goes from 100 to 300 MPa while strain goes from 0.05 % to 0.15 %. Strain change = 0.10 % = 0.0010. E = 200 ÷ 0.0010 = 200,000 MPa = 200 GPa.</p>
+<h3 style="margin:14px 0 8px">Measure the broken bar</h3><div id="meas"></div></div>
+<div style="flex:1;min-width:280px"><h3 style="margin:8px 0">Your answers</h3><div id="af"></div>
+<button class="btn" id="bChk">Check my answers</button> <button class="btn" id="bShow">Show answers</button></div></div></section>
+
+<section class="card hide" id="s3"><h2>3. Does it meet the specification?</h2>
+<p class="mut" id="sph"></p><table><thead><tr><th>Property</th><th>Required</th><th>This specimen</th><th></th></tr></thead><tbody id="st"></tbody></table>
+<div class="row noprint" style="margin-top:10px"><button class="btn" id="bAcc">Accept</button><button class="btn" id="bRej">Reject</button><button class="btn" id="bPrn">Print report</button></div>
+<p id="vd"></p></section>
+
+<p class="mut">Values are indicative, for education only. Ranges based on EN 10025-2/-3, EN 10083-2/-3, EN 10084, ASTM A240/A276 and AMS 6417. Not for design or certification.</p>
+</main>
+<script>
+//MATH
+const R=(a,b)=>{const r=(Math.random()+Math.random())/2;return a+(b-a)*r};
+const G=[
+{id:'S275',n:'S275 mild steel',std:'EN 10025-2',yp:1,E:[205,212],Rp:[285,335],Rm:[430,500],A:[26,32],Z:[60,72],fAg:.55,fr:.68,p:2.4,k:6,lu:[1.2,2.2],sp:{Rp:275,Rm:[410,560],A:20},note:'Mild steel. Look for the sharp upper yield peak, the drop to a flat plateau while the steel yields, then strain hardening up to the UTS.'},
+{id:'S355',n:'S355 structural steel',std:'EN 10025-2',yp:1,E:[205,212],Rp:[365,430],Rm:[500,590],A:[23,29],Z:[55,70],fAg:.55,fr:.7,p:2.4,k:6,lu:[1,1.8],sp:{Rp:355,Rm:[470,630],A:22},note:'Same behaviour as S275 but stronger. Compare the yield peak and plateau with S275.'},
+{id:'S460',n:'S460 HSLA steel',std:'EN 10025-3',yp:1,E:[205,212],Rp:[470,540],Rm:[570,670],A:[18,24],Z:[50,65],fAg:.55,fr:.72,p:2.4,k:6,lu:[.6,1.2],sp:{Rp:460,Rm:[540,720],A:17},note:'High-strength low-alloy steel. Stronger again, with a shorter plateau and less stretch before breaking.'},
+{id:'C45',n:'C45 / 1045',std:'EN 10083-2, quenched and tempered',E:[205,212],Rp:[500,590],Rm:[730,840],A:[15,20],Z:[40,52],fAg:.5,fr:.75,p:2.2,k:8,sp:{Rp:490,Rm:[700,850],A:14,Z:35},note:'Heat-treated medium carbon steel. There is no sharp yield point, so the 0.2% offset method is needed.'},
+{id:'42CrMo4',n:'42CrMo4 / 4140',std:'EN 10083-3, quenched and tempered',E:[205,212],Rp:[930,1050],Rm:[1120,1250],A:[11,14],Z:[42,58],fAg:.5,fr:.78,p:2.2,k:10,sp:{Rp:900,Rm:[1100,1300],A:10,Z:40},note:'Alloy steel with a rounded curve. Twice the strength of C45 steel for a little less stretch.'},
+{id:'8620',n:'8620',std:'core properties, case-hardening grade',E:[205,212],Rp:[580,720],Rm:[800,980],A:[12,17],Z:[45,60],fAg:.55,fr:.75,p:2.2,k:7,sp:{Rp:540,Rm:[780,1080],A:10},note:'Tested here as the tough core of a case-hardened part. The hard outer case would be tested differently.'},
+{id:'304',n:'304 stainless',std:'ASTM A240, annealed',E:[190,196],Rp:[230,330],Rm:[580,720],A:[46,60],Z:[65,78],fAg:.8,fr:.62,p:1.6,k:3,sp:{Rp:205,Rm:[515,null],A:40},note:'Austenitic stainless. Low yield, a very gradual curve, huge strain hardening and stretch. Check the strain axis: it is much longer than for other grades.'},
+{id:'300M',n:'300M aerospace steel',std:'AMS 6417',E:[200,208],Rp:[1620,1730],Rm:[1960,2080],A:[8.5,11],Z:[32,42],fAg:.4,fr:.82,p:2,k:12,sp:{Rp:1585,Rm:[1930,null],A:8,Z:30},note:'Ultra-high-strength steel. Very high stress but little stretch: the curve ends soon after the peak.'}];
+const d0=10,L0=50,S0=Math.PI*d0*d0/4;
+function proof(s,o){let a=o,b=s.Ag;const g=e=>s.E*(e-o)-s.f(e);if(g(b)<0)return b;for(let i=0;i<60;i++){const m=(a+b)/2;g(m)<0?a=m:b=m}return a}
+function gen(g){
+ const s={E:R(...g.E)*1000,Rp:R(...g.Rp),Rm:R(...g.Rm),A:R(...g.A),Z:R(...g.Z)},sp=g.sp;
+ if(Math.random()<.3){const o=['Rp','A'].concat(sp.Z?['Z']:[]),k=o[Math.floor(Math.random()*o.length)];s[k]=sp[k]*R(.8,.97)}
+ s.Rm=Math.max(s.Rm,s.Rp*1.12);s.A/=100;s.Z/=100;
+ const E=s.E,Rm=s.Rm;s.Ag=s.A*g.fAg;s.Rf=Rm*g.fr*R(.96,1.04);s.Af=s.A+s.Rf/E;s.nk=R(.38,.62);
+ const neck=e=>Rm-(Rm-s.Rf)*Math.pow(Math.max((e-s.Ag)/(s.Af-s.Ag),0),2.2);
+ if(g.yp){s.ReL=s.Rp;s.ReH=s.ReL/R(.9,.96);s.eL=R(...g.lu)/100;const eH=s.ReH/E,w=.0007;
+  s.f=e=>{if(e<=eH)return E*e;if(e<eH+w){const t=(e-eH)/w;return s.ReH-(s.ReH-s.ReL)*t*t*(3-2*t)}
+   if(e<s.eL)return s.ReL+2.5*(.5+.5*Math.sin(e*4000));if(e<=s.Ag){const u=(e-s.eL)/(s.Ag-s.eL);return Rm-(Rm-s.ReL)*Math.pow(1-u,g.p)}return neck(e)};
+  s.eLo=eH+w;s.Rp=s.f(proof(s,.002))}
+ else{const mk=S=>e=>e<=s.Ag?Math.pow(Math.pow(E*e,-g.k)+Math.pow(Rm-(Rm-S)*Math.pow(1-e/s.Ag,g.p),-g.k),-1/g.k):neck(e);
+  let S=s.Rp*.7;for(let i=0;i<10;i++){s.f=mk(S);S=Math.min(S*s.Rp/s.f(proof(s,.002)),s.Rp*.98)}s.f=mk(S);s.Rp=s.f(proof(s,.002))}
+ let pk=0;for(let i=0;i<=3000;i++){const e=s.Ag*1.02*i/3000,v=s.f(e);if(v>pk){pk=v;s.eU=e}}s.Rm=pk;return s}
+const pass=(g,s)=>{const sp=g.sp,y=s.Rp;return[y>=sp.Rp,s.Rm>=sp.Rm[0]&&(!sp.Rm[1]||s.Rm<=sp.Rm[1]),s.A*100>=sp.A,!sp.Z||s.Z*100>=sp.Z]};
+//END
+const $=id=>document.getElementById(id),pc=$('plot'),sc=$('sc'),px=pc.getContext('2d'),sx=sc.getContext('2d');
+let g=G[0],S,ec=0,done=0,run=0,view='F',cur=null,tau=0,t0=0,dur=8000;
+const ML=62,MR=16,MT=14,MB=44;
+$('grades').innerHTML=G.map((x,i)=>`<button class="chip" data-i="${i}" aria-pressed="${!i}">${x.id}</button>`).join('');
+$('grades').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;g=G[i];document.querySelectorAll('.chip[data-i]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.i==i));load()};
+function size(c){const d=devicePixelRatio||1;c.width=c.clientWidth*d;c.height=c.clientHeight*d;c.getContext('2d').setTransform(d,0,0,d,0,0)}
+function load(){run=0;S=gen(g);ec=0;done=0;cur=null;$('s2').classList.add('hide');$('s3').classList.add('hide');$('bRun').disabled=0;
+ $('ginfo').textContent=`${g.n}. ${g.std}.`;$('vd').textContent='';frame()}
+function bounds(){if(view=='F')return[S.Af*1.04,S.Rm*1.1];const y=g.yp?S.ReH:S.Rp;return[y/S.E+.006,y*1.25]}
+const nice=r=>{const p=Math.pow(10,Math.floor(Math.log10(r))),m=r/p;return(m<1.5?1:m<3?2:m<7?5:10)*p};
+const col=n=>getComputedStyle(document.body).getPropertyValue(n);
+function plot(){const W=pc.clientWidth,H=pc.clientHeight,x=px;x.clearRect(0,0,W,H);
+ const[xm,ym]=bounds(),X=e=>ML+e/xm*(W-ML-MR),Y=s=>H-MB-s/ym*(H-MT-MB),ink=col('--ink'),mut=col('--mut'),line=col('--line'),acc=col('--acc'),hot=col('--hot');
+ x.font='12px system-ui';x.lineWidth=1;x.fillStyle=mut;
+ let st=nice(ym/6);for(let v=0;v<=ym;v+=st){x.strokeStyle=line;x.beginPath();x.moveTo(ML,Y(v));x.lineTo(W-MR,Y(v));x.stroke();x.textAlign='right';x.fillText(Math.round(v*100)/100,ML-6,Y(v)+4)}
+ st=nice(xm*100/6);for(let v=0;v<=xm*100;v+=st){x.textAlign='center';x.fillText(Math.round(v*1000)/1000,X(v/100),H-MB+16)}
+ x.fillText('Strain (%)',ML+(W-ML-MR)/2,H-8);x.save();x.translate(14,MT+(H-MT-MB)/2);x.rotate(-Math.PI/2);x.fillText('Stress (MPa)',0,0);x.restore();
+ x.strokeStyle=ink;x.beginPath();x.moveTo(ML,MT);x.lineTo(ML,H-MB);x.lineTo(W-MR,H-MB);x.stroke();
+ x.save();x.beginPath();x.rect(ML,MT,W-ML-MR,H-MT-MB);x.clip();
+ const dot=(e,s,c,t)=>{x.fillStyle=c;x.beginPath();x.arc(X(e),Y(s),5,0,7);x.fill();if(t){x.fillStyle=ink;x.textAlign='left';x.fillText(t,X(e)+8,Y(s)-8)}};
+ if(done){const o=+$('off').value/100,guided=$('guided').checked;
+  if(guided){x.setLineDash([4,4]);x.strokeStyle=mut;x.beginPath();x.moveTo(X(0),Y(0));x.lineTo(X(ym/S.E),Y(ym));x.stroke()}
+  x.setLineDash([]);x.strokeStyle=hot;x.lineWidth=1.5;x.beginPath();x.moveTo(X(o),Y(0));x.lineTo(X(o+ym/S.E),Y(ym));x.stroke();
+  if(o>0){const ei=proof(S,o);dot(ei,S.f(ei),hot,guided?(+(o*100).toFixed(2)==.2?'Rp0.2':'offset'):'')}}
+ x.strokeStyle=acc;x.lineWidth=2.5;x.beginPath();const ee=Math.min(ec,xm),N=1600;
+ for(let i=0;i<=N;i++){const e=ee*i/N;i?x.lineTo(X(e),Y(S.f(e))):x.moveTo(X(e),Y(S.f(e)))}
+ if(done&&S.Af<=xm)x.lineTo(X(S.Af),Y(0));x.stroke();
+ if(done&&$('guided').checked){dot(S.eU,S.Rm,acc,'UTS (Rm)');}
+ if(cur!=null&&ec>0){const e=Math.min(cur,ec);x.strokeStyle=mut;x.setLineDash([3,3]);x.beginPath();x.moveTo(X(e),H-MB);x.lineTo(X(e),Y(S.f(e)));x.lineTo(ML,Y(S.f(e)));x.stroke();x.setLineDash([]);dot(e,S.f(e),ink)}
+ x.restore()}
+function spec(){const W=sc.clientWidth,H=sc.clientHeight,x=sx,cx=W/2;x.clearRect(0,0,W,H);
+ const wg=30,wt=60,tab=36,sh=14,Lg=110*(1+ec),tot=2*(tab+sh)+Lg,top=(H-tot)/2,gy0=top+tab+sh,gy1=gy0+Lg,yc=gy0+Lg*S.nk;
+ const eu=Math.min(ec,S.Ag),wU=wg/Math.sqrt(1+eu),wf=wg*Math.sqrt(1-S.Z),nn=ec>S.Ag?Math.min(1,(ec-S.Ag)/(S.Af-S.Ag)):0,wN=done?wf:wU-(wU-wf)*Math.pow(nn,1.4);
+ const w=y=>wU-(wU-wN)*Math.exp(-Math.pow((y-yc)/(Lg*.12),2));
+ const gr=x.createLinearGradient(cx-wt/2,0,cx+wt/2,0);gr.addColorStop(0,'#aab6c2');gr.addColorStop(.5,'#e3e9ee');gr.addColorStop(1,'#8f9ba8');
+ const ys=[];for(let y=gy0;y<gy1;y+=3)ys.push(y);ys.push(gy1);
+ const body=()=>{x.beginPath();x.moveTo(cx-wt/2,top);x.lineTo(cx+wt/2,top);x.lineTo(cx+wt/2,top+tab);ys.forEach(y=>x.lineTo(cx+w(y)/2,y));
+  x.lineTo(cx+wt/2,gy1+sh);x.lineTo(cx+wt/2,gy1+sh+tab);x.lineTo(cx-wt/2,gy1+sh+tab);x.lineTo(cx-wt/2,gy1+sh);ys.slice().reverse().forEach(y=>x.lineTo(cx-w(y)/2,y));x.lineTo(cx-wt/2,top+tab);x.closePath();
+  x.fillStyle=gr;x.fill();x.strokeStyle='#4b5966';x.lineWidth=1.5;x.stroke();x.fillStyle='#43505c';x.fillRect(cx-40,top-24,80,tab+4);x.fillRect(cx-40,gy1+sh+6,80,tab+18)};
+ if(done){[[0,yc,-7],[yc,H,7]].forEach(([a,b,d])=>{x.save();x.beginPath();x.rect(0,a,W,b-a);x.clip();x.translate(0,d);body();x.restore()})}else body()}
+function frame(){const s=ec>0?(done?0:S.f(ec)):0;$('rF').textContent=(s*S0/1000).toFixed(1)+' kN';$('rS').textContent=Math.round(s)+' MPa';$('rE').textContent=(ec*100).toFixed(2)+' %';$('rX').textContent=(ec*L0).toFixed(2)+' mm';spec();plot()}
+function tick(now){if(!run)return;tau=Math.min(1,(now-t0)/dur);
+ const e1=g.yp?S.eL*1.1:Math.min(3*(S.Rp/S.E+.002),S.Ag*.6);
+ ec=tau<.25?e1*tau/.25:tau<.6?e1+(S.Ag-e1)*(tau-.25)/.35:S.Ag+(S.Af-S.Ag)*(tau-.6)/.4;
+ if(tau>=1){ec=S.Af;done=1;run=0;finish()}frame();if(run)requestAnimationFrame(tick)}
+$('bRun').onclick=()=>{if(run||done)return;run=1;$('bRun').disabled=1;dur=+$('speed').value;t0=performance.now();requestAnimationFrame(tick)};
+$('bNew').onclick=load;
+const T=()=>({ReH:S.ReH,ReL:S.ReL,Rp:S.Rp,Rm:S.Rm,E:S.E/1000,A:S.A*100,Z:S.Z*100});
+const FL=()=>([['Rp','0.2% proof strength, Rp0.2','MPa']]).concat([['Rm','Ultimate tensile strength, Rm','MPa'],['E',"Young's modulus, E",'GPa'],['A','Elongation, A','%'],['Z','Reduction of area, Z','%']]);
+function finish(){$('s2').classList.remove('hide');$('s3').classList.remove('hide');$('gnote').textContent=g.note;
+ const Lf=(L0*(1+S.A)).toFixed(2),df=(d0*Math.sqrt(1-S.Z)).toFixed(2);
+ $('meas').innerHTML=`<p><b>Elongation, A.</b> Fit the two broken halves together and measure the gauge length: <b>Lf = ${Lf} mm</b>. It started at L0 = 50 mm.</p><ol><li>How much longer did it get? Lf − L0 = ${Lf} − 50</li><li>Divide by the original length: ÷ 50</li><li>Multiply by 100 to give a percentage.</li></ol><p class="mut">Put together: A = (${Lf} − 50) ÷ 50 × 100</p>
+<p><b>Reduction of area, Z.</b> Measure the thinnest point at the break: <b>df = ${df} mm</b>. It started at d0 = 10 mm.</p><ol><li>Original area: S0 = π × 10² ÷ 4 = 78.54 mm²</li><li>Area at the break: Su = π × ${df}² ÷ 4. Square the diameter, multiply by π, divide by 4.</li><li>Area lost: 78.54 − Su</li><li>Divide by the original area: ÷ 78.54</li><li>Multiply by 100 to give a percentage.</li></ol><p class="mut">Put together: Z = (78.54 − Su) ÷ 78.54 × 100</p>`;
+ $('af').innerHTML=FL().map(f=>`<div class="f"><label for="a${f[0]}">${f[1]} (${f[2]})</label><input id="a${f[0]}" type="number" step="any" inputmode="decimal"><span id="m${f[0]}"></span></div>`).join('');
+ $('sph').textContent=`Specification (${g.id}, ${g.std}). Decide whether this specimen passes, then reveal the result.`;
+ const sp=g.sp;$('st').innerHTML=[['0.2% proof strength Rp0.2','≥ '+sp.Rp+' MPa'],['Tensile strength Rm',sp.Rm[1]?sp.Rm[0]+' to '+sp.Rm[1]+' MPa':'≥ '+sp.Rm[0]+' MPa'],['Elongation A','≥ '+sp.A+' %']].concat(sp.Z?[['Reduction of area Z','≥ '+sp.Z+' %']]:[]).map((r,i)=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td id="v${i}">?</td><td id="p${i}"></td></tr>`).join('');
+ $('bAcc').disabled=$('bRej').disabled=0;$('s2').scrollIntoView({behavior:'smooth'})}
+$('bChk').onclick=()=>{const t=T(),tol={ReH:.03,ReL:.04,Rp:.03,Rm:.025,E:.07};let n=0,all=FL();
+ all.forEach(([k])=>{const v=parseFloat($('a'+k).value),ok=!isNaN(v)&&(k=='A'?Math.abs(v-t[k])<=.6:k=='Z'?Math.abs(v-t[k])<=1.2:Math.abs(v-t[k])<=t[k]*tol[k]);n+=ok;$('m'+k).textContent=ok?'✓':'✗';$('m'+k).className=ok?'pass':'fail'});
+ $('af').dataset.s=n+' of '+all.length+' correct'};
+$('bShow').onclick=()=>{const t=T();FL().forEach(([k])=>{$('a'+k).value=t[k].toFixed(k=='E'||k=='A'||k=='Z'?1:0)})};
+$('bChk').addEventListener('click',()=>{$('bChk').textContent='Check my answers ('+$('af').dataset.s+')'});
+function judge(acc){const ps=pass(g,S),v=S.Rp,vals=[v.toFixed(0)+' MPa',S.Rm.toFixed(0)+' MPa',(S.A*100).toFixed(1)+' %',(S.Z*100).toFixed(1)+' %'];
+ ps.forEach((p,i)=>{if($('v'+i)){$('v'+i).textContent=vals[i];$('p'+i).textContent=p?'Pass':'Fail';$('p'+i).className=p?'pass':'fail'}});
+ const ok=ps.every(Boolean);$('vd').innerHTML=(acc==ok?'<b class="pass">Correct.</b> ':'<b class="fail">Not quite.</b> ')+(ok?'Every property meets the specification, so this specimen is accepted.':'At least one property is below the requirement, so this specimen is rejected.');$('bAcc').disabled=$('bRej').disabled=1}
+$('bAcc').onclick=()=>judge(true);$('bRej').onclick=()=>judge(false);$('bPrn').onclick=()=>print();
+function setView(v){view=v;$('vF').setAttribute('aria-pressed',v=='F');$('vZ').setAttribute('aria-pressed',v=='Z');plot()}
+$('vF').onclick=()=>setView('F');$('vZ').onclick=()=>setView('Z');
+$('off').oninput=()=>{$('offv').textContent=(+$('off').value).toFixed(2)+' %';plot()};
+$('guided').onchange=()=>{const gd=$('guided').checked;$('off').disabled=gd;if(gd){$('off').value=.2;$('off').oninput()}plot()};$('off').disabled=1;
+pc.addEventListener('pointermove',ev=>{if(!done)return;const r=pc.getBoundingClientRect(),[xm]=bounds();cur=Math.max(0,Math.min((ev.clientX-r.left-ML)/(r.width-ML-MR)*xm,ec));
+ $('cur').textContent=`On the curve: strain ${(cur*100).toFixed(3)} %, stress ${S.f(cur).toFixed(0)} MPa`;plot()});
+addEventListener('resize',()=>{size(pc);size(sc);frame()});size(pc);size(sc);load();
+</script></body></html>

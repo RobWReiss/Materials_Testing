@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inclusion Rating Simulator</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1d2a36;--mut:#5a6978;--line:#d8dfe6;--acc:#1b5f86;--hot:#d9731f;--ok:#1b7f4b;--bad:#b3261e;--soft:#e7eef4}
+@media(prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1e262e;--ink:#e6ebf0;--mut:#9aa8b6;--line:#34414d;--acc:#5ab0e0;--hot:#f0963f;--ok:#4cc98a;--bad:#ff8a80;--soft:#27333e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{background:#22323f;color:#fff;padding:18px 20px;border-bottom:4px solid var(--hot)}
+header h1{margin:0;font-size:1.4rem}header p{margin:2px 0 0;color:#b9c7d4;font-size:.95rem}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.15rem}h3{margin:12px 0 6px;font-size:1rem}
+button,select{font:inherit;color:inherit}
+.chip,.btn{border:1px solid var(--line);background:var(--soft);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn.go{background:var(--hot);color:#1a1006;border-color:var(--hot);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.mut{color:var(--mut);font-size:.92rem}
+.hide{display:none}canvas{display:block;image-rendering:auto}
+.types{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.types figure{margin:0}.types canvas,.fb canvas{width:100%;height:auto;border-radius:4px}
+.fg{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.fb{border:3px solid transparent;background:var(--soft);border-radius:8px;padding:6px;cursor:pointer;text-align:center}
+.fb.good{border-color:var(--ok)}.fb.bad{border-color:var(--bad)}
+.plates{display:flex;flex-wrap:wrap;gap:10px}.plates figure{margin:0;text-align:center}.plates canvas{width:118px;height:118px;border-radius:4px}
+table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+select{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--card);min-height:40px}
+.pass{color:var(--ok);font-weight:600}.fail{color:var(--bad);font-weight:600}
+details{background:var(--soft);border-radius:8px;padding:8px 12px;margin-bottom:16px}summary{cursor:pointer;font-weight:600}
+dt{font-weight:600;margin-top:6px}dd{margin:0;color:var(--mut)}
+.note{border-left:4px solid var(--hot);padding:6px 12px;background:var(--soft);margin:10px 0;border-radius:0 8px 8px 0}
+#big{width:300px;max-width:100%;height:auto;border-radius:6px;border:1px solid var(--line)}
+@media print{.noprint,.btn,.chip,details{display:none!important}body{background:#fff;color:#000}}
+</style></head><body>
+<header><h1>Inclusion Rating Simulator</h1><p>Look inside a polished piece of steel and judge how clean it is (ASTM E45, Method A, simplified).</p></header>
+<main>
+<details class="noprint"><summary>New to this? What the words mean</summary><dl>
+<dt>Non-metallic inclusions</dt><dd>Tiny particles of non-steel material, such as oxides and sulfides, that get trapped in steel when it is made.</dd>
+<dt>Why they matter</dt><dd>A crack can start at an inclusion. Cleaner steel lasts longer, which matters most in parts that are loaded over and over, such as bearings, shafts and aircraft landing gear.</dd>
+<dt>How it is checked</dt><dd>A slice of steel is polished flat and viewed under a microscope at 100 times magnification. What is seen is compared with a set of reference pictures, called chart plates.</dd>
+<dt>The worst field</dt><dd>A "field" is one microscope view. The field with the most inclusions is the worst field, and that is the one that gets rated.</dd>
+<dt>Severity</dt><dd>A score from 0.5 (very few) up to 3 (a lot), in half steps. Pick the chart plate that looks most like your field.</dd>
+<dt>Thin or heavy</dt><dd>Thin inclusions are fine and narrow. Heavy ones are wide and chunky. Heavy ones do more harm, so the limits are stricter for them.</dd></dl></details>
+
+<section class="card"><h2>1. Meet the four types of inclusion</h2><p class="mut" style="margin-top:0">Each type has its own shape and colour. All four are shown here at the same magnification as the steel you will inspect.</p>
+<div class="types" id="types"></div></section>
+
+<section class="card"><h2>2. Find the worst field</h2>
+<p>This polished specimen has been photographed in six fields. Click the field with the <b>most</b> and the <b>biggest</b> inclusions. Each field covers an area about 0.7 mm across.</p>
+<div class="fg" id="fg"></div><p id="wmsg" class="note" style="min-height:2.6em"></p>
+<button class="btn noprint" id="bNew">New specimen</button></section>
+
+<section class="card hide" id="s3"><h2>3. Rate the worst field</h2>
+<p class="mut" style="margin-top:0">For each type, compare the field with the chart plates and choose the severity that matches. Choose "None" if the type is absent. Then say whether the inclusions look thin or heavy. Click a type's name to see its chart plates.</p>
+<div class="row"><div><canvas id="big" width="260" height="260"></canvas><p class="mut" id="bigc"></p></div>
+<div style="flex:1;min-width:300px"><table><thead><tr><th>Type</th><th>Severity</th><th>Series</th><th></th></tr></thead><tbody id="rt"></tbody></table>
+<div style="margin-top:10px"><button class="btn" id="bChk">Check my ratings</button> <button class="btn" id="bShow">Show answers</button> <span id="tally" class="mut"></span></div></div></div>
+<h3 id="plc"></h3><div class="plates" id="pl"></div></section>
+
+<section class="card hide" id="s4"><h2>4. Does the steel pass?</h2>
+<p>Illustrative limit for this steel: <b>no inclusion type may be rated above 2 if thin, or above 1½ if heavy.</b></p>
+<div class="row noprint"><button class="btn" id="bP">Accept</button><button class="btn" id="bF">Reject</button><button class="btn" id="bPrn">Print report</button></div><div id="res"></div></section>
+<p class="mut">Pictures are computer-generated to look like polished, unetched steel at 100×. Limits are illustrative only. Real limits depend on the customer and the standard. Not for design or certification.</p>
+</main>
+<script>
+//MATH
+const TY=[['A','Sulfide'],['B','Alumina'],['C','Silicate'],['D','Globular oxide']],P=[0,.5,1,1.5,2,2.5,3];
+const pk=w=>{let r=Math.random()*w.reduce((a,b)=>a+b),i=0;while(i<w.length-1&&r>w[i]){r-=w[i];i++}return i};
+function mk(){const cl=pk([.4,.3,.3]),w=[[3,5,4,2,.5,0,0],[1,2,3,3,3,2,.5],[0,0,1,2,3,3,3]][cl],hp=[.15,.3,.5][cl],t={};
+ TY.forEach(([k])=>t[k]={sev:P[pk(w)],heavy:Math.random()<hp});
+ if(!TY.some(([k])=>t[k].sev))t[TY[pk([1,1,1,1])][0]].sev=.5;
+ const W=Math.floor(Math.random()*6),f=[];
+ for(let j=0;j<6;j++){const o={};TY.forEach(([k])=>{const s=t[k].sev;o[k]={sev:j==W?s:Math.max(0,s-.5*(1+Math.floor(Math.random()*3))),heavy:t[k].heavy}});f.push(o)}
+ return{W,t,f,seed:Math.floor(Math.random()*1e6)}}
+const lim=t=>t.heavy?1.5:2,bad=S=>TY.find(([k])=>S.t[k].sev>lim(S.t[k])),ok=S=>!bad(S);
+//END
+const $=id=>document.getElementById(id);
+function paint(cv,T,seed){const x=cv.getContext('2d'),S=260;let a=seed|0;
+ const r=()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296},u=(l,h)=>l+(h-l)*r();
+ x.fillStyle='#d5d8dc';x.fillRect(0,0,S,S);
+ for(let i=0;i<600;i++){x.fillStyle=`rgba(${r()<.5?'255,255,255':'110,115,120'},${u(.03,.1)})`;x.fillRect(u(0,S),u(0,S),u(1,3),u(1,3))}
+ for(const k of['A','C']){const t=T[k];if(!t||!t.sev)continue;let n=Math.ceil(t.sev*3);if(t.heavy)n=Math.max(1,Math.round(n*.7));
+  for(let i=0;i<n;i++){const L=k=='A'?u(50,120):u(35,90),w=t.heavy?u(6,9):u(2,3.5);x.save();x.translate(u(L/2+8,S-L/2-8),u(12,S-12));x.rotate(u(-.07,.07));
+   x.fillStyle=k=='A'?'#777c84':'#1f2126';x.beginPath();
+   if(k=='A')x.ellipse(0,0,L/2,w/2,0,0,7);else{x.moveTo(-L/2,0);x.quadraticCurveTo(0,-w,L/2,0);x.quadraticCurveTo(0,w,-L/2,0)}x.fill();x.restore()}}
+ if(T.B&&T.B.sev){let m=Math.ceil(T.B.sev*1.5);if(T.B.heavy)m=Math.max(1,m-1);
+  for(let i=0;i<m;i++){let px=u(8,60),py=u(15,S-15);const np=Math.round(u(5,9)),sz=T.B.heavy?u(6,9):u(3,5);
+   for(let j=0;j<np&&px<S-8;j++){const s=sz*u(.8,1.2);x.fillStyle='#2e3642';x.beginPath();for(let v=0;v<6;v++){const an=v*1.047+u(-.3,.3),rr=s*u(.6,1);v?x.lineTo(px+rr*Math.cos(an),py+rr*Math.sin(an)):x.moveTo(px+rr*Math.cos(an),py+rr*Math.sin(an))}x.fill();px+=s*u(1.8,3);py+=u(-2,2)}}}
+ if(T.D&&T.D.sev){let n=Math.round(T.D.sev*6)+3;if(T.D.heavy)n=Math.round(n*.6);x.fillStyle='#0d0e11';
+  for(let i=0;i<n;i++){x.beginPath();x.arc(u(10,S-10),u(10,S-10),T.D.heavy?u(3.8,5.5):u(1.7,2.6),0,7);x.fill()}}
+ x.strokeStyle='#8a9098';x.strokeRect(.5,.5,S-1,S-1)}
+let S,tab='A',found=0;
+$('types').innerHTML=TY.map(([k,n],i)=>`<figure><canvas id="ex${k}" width="260" height="260"></canvas><figcaption><b>${k}: ${n}</b><br><span class="mut">${['Long, mid-grey, softer-looking lines, stretched out by rolling.','Hard, dark, angular particles lined up in strings.','Long, very dark lines with pointed ends.','Round, dark dots scattered at random.'][i]}</span></figcaption></figure>`).join('');
+TY.forEach(([k],i)=>paint($('ex'+k),{[k]:{sev:1.5,heavy:false}},500+i*37));
+$('fg').innerHTML=[0,1,2,3,4,5].map(i=>`<button class="fb" data-i="${i}"><canvas id="fc${i}" width="260" height="260"></canvas><b>Field ${i+1}</b></button>`).join('');
+$('rt').innerHTML=TY.map(([k,n],i)=>`<tr><td><button class="chip" data-t="${k}" aria-pressed="${!i}">${k}: ${n}</button></td><td><select id="sv${k}"><option value="">Choose</option>${P.map(p=>`<option value="${p}">${p||'None'}</option>`).join('')}</select></td><td><select id="sr${k}"><option value="0">Thin</option><option value="1">Heavy</option></select></td><td id="mk${k}"></td></tr>`).join('');
+$('pl').innerHTML=[1,2,3,4,5,6].map(i=>`<figure><canvas id="pl${i}" width="260" height="260"></canvas><figcaption><b>${P[i]}</b></figcaption></figure>`).join('');
+function plates(){const n=TY.find(t=>t[0]==tab)[1],h=$('sr'+tab).value=='1',ti=TY.findIndex(t=>t[0]==tab);
+ $('plc').textContent=`Chart plates: ${tab} ${n.toLowerCase()}, ${h?'heavy':'thin'} series`;
+ for(let i=1;i<=6;i++)paint($('pl'+i),{[tab]:{sev:P[i],heavy:h}},900+i*13+ti*101);
+ document.querySelectorAll('.chip[data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t==tab))}
+$('rt').onclick=e=>{const t=e.target.dataset.t;if(t){tab=t;plates()}};
+$('rt').onchange=e=>{if(e.target.id=='sr'+tab)plates()};
+function load(){S=mk();found=0;$('s3').classList.add('hide');$('s4').classList.add('hide');$('res').innerHTML='';$('tally').textContent='';
+ $('wmsg').textContent='Look at all six fields, then click the one that looks worst.';
+ for(let i=0;i<6;i++){paint($('fc'+i),S.f[i],S.seed+i*977);$('fg').children[i].className='fb'}
+ TY.forEach(([k])=>{$('sv'+k).value='';$('sr'+k).value='0';$('mk'+k).textContent=''});tab='A';plates()}
+$('fg').onclick=e=>{const b=e.target.closest('.fb');if(!b||found)return;const i=+b.dataset.i;
+ if(i==S.W){found=1;b.className='fb good';$('wmsg').textContent=`Yes, field ${i+1} is the worst: it has the most and the biggest inclusions. Now rate it.`;
+  paint($('big'),S.f[i],S.seed+i*977);$('bigc').textContent=`Field ${i+1}, magnified 100×`;$('s3').classList.remove('hide');$('s4').classList.remove('hide');$('s3').scrollIntoView({behavior:'smooth'})}
+ else{b.className='fb bad';$('wmsg').textContent='Not that one. Look for the field with the most inclusions, and the widest ones.'}};
+$('bChk').onclick=()=>{let n=0;TY.forEach(([k])=>{const t=S.t[k],v=parseFloat($('sv'+k).value),o=!isNaN(v)&&Math.abs(v-t.sev)<=.5&&(t.sev==0||+$('sr'+k).value==+t.heavy);n+=o;$('mk'+k).textContent=o?'✓':'✗';$('mk'+k).className=o?'pass':'fail'});
+ $('tally').textContent=n+' of 4 correct (one step either way counts)'};
+$('bShow').onclick=()=>TY.forEach(([k])=>{$('sv'+k).value=S.t[k].sev;$('sr'+k).value=+S.t[k].heavy;});
+function decide(ans){const o=ok(S),b=bad(S);
+ $('res').innerHTML=`<p>${ans==o?'<b class="pass">Correct.</b> ':'<b class="fail">Not quite.</b> '}This steel <b class="${o?'pass':'fail'}">${o?'passes':'fails'}</b>${o?', because every type is within its limit.':`, because type ${b[0]} (${b[1].toLowerCase()}) is rated ${S.t[b[0]].sev}, ${S.t[b[0]].heavy?'heavy':'thin'}, which is above the limit of ${lim(S.t[b[0]])}.`}</p>
+<div class="note">Cleaner steel is made by careful steelmaking, such as removing oxygen and sulfur and letting particles float out into the slag. The cleaner the steel, the longer it lasts under repeated loading.</div>`}
+$('bP').onclick=()=>decide(true);$('bF').onclick=()=>decide(false);$('bPrn').onclick=()=>print();$('bNew').onclick=load;
+load();
+</script></body></html>
